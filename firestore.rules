@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return request.auth != null && 
+        request.auth.token.email_verified == true && (
+        request.auth.token.email == "johnnyblueagency@gmail.com" ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isPrivileged() {
+      return request.auth != null && 
+        request.auth.token.email_verified == true && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ["Admin", "Manager", "Editor"])
+      );
+    }
+
+    function isValidAiTool(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.category in ["LLM & Chat", "Image & Art", "Developer Tools", "Productivity", "Audio & Video", "Other"] &&
+             data.type in ["Web App", "Software (Desktop)", "Mobile / APK", "API / Platform"] &&
+             data.url is string && data.url.size() <= 500 &&
+             (data.get('apk', '') == '' || (data.apk is string && data.apk.size() <= 500)) &&
+             data.desc is string && data.desc.size() <= 1000 &&
+             data.upvotes is int &&
+             (data.get('visitCount', 0) is int) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidArticle(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.content is string && data.content.size() > 0 && data.content.size() <= 10000 &&
+             data.authorId is string &&
+             data.authorRole in ["Admin", "Manager", "Editor", "User"] &&
+             data.status in ["published", "draft"] &&
+             (data.get('views', 0) is int) &&
+             (data.get('mediaUrl', null) == null || (data.mediaUrl is string && data.mediaUrl.size() <= 1000)) &&
+             (data.get('mediaType', null) == null || data.mediaType in ['image', 'video']) &&
+             (data.get('videoEmbedUrl', null) == null || (data.videoEmbedUrl is string && data.videoEmbedUrl.size() <= 500)) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    // Allow test connection for client-side readiness check
+    match /test/connection {
+      allow read: if true;
+    }
+    
+    match /articles/{articleId} {
+      allow read: if true;
+      allow create: if request.auth != null && 
+                    isValidArticle(incoming()) &&
+                    incoming().authorId == request.auth.uid &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      allow update: if 
+                    // Case 1: Incremental View Counter (Public)
+                    (incoming().diff(existing()).affectedKeys().hasOnly(['views']) &&
+                     incoming().views == (existing().get('views', 0) + 1)) ||
+                    // Case 2: Author or Privileged user editing
+                    (request.auth != null && (request.auth.uid == existing().authorId || isPrivileged()) &&
+                     isValidArticle(incoming()) &&
+                     incoming().authorId == existing().authorId &&
+                     incoming().createdAt == existing().createdAt &&
+                     incoming().updatedAt == request.time);
+      allow delete: if request.auth != null && (request.auth.uid == existing().authorId || isPrivileged());
+    }
+
+    match /ai_tools/{toolId} {
+      // Public read for the directory
+      allow read: if true;
+
+      // Allow creation with valid data
+      allow create: if isValidAiTool(incoming()) && 
+                    incoming().upvotes >= 0 &&
+                    incoming().upvotes < 1000 && // Cap for anti-spam
+                    incoming().createdAt == request.time;
+
+      // Allow updates specifically for voting or visits
+      allow update: if 
+                    // Action 1: Upvote
+                    (incoming().upvotes == existing().upvotes + 1 &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['upvotes'])) ||
+                    // Action 2: Increment Visit Count (Public)
+                    (incoming().visitCount == (existing().get('visitCount', 0) + 1) &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['visitCount'])) ||
+                    // Action 3: Privileged Admin Update
+                    isPrivileged();
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if request.auth != null && 
+                        incoming().userId == request.auth.uid &&
+                        incoming().toolId == toolId &&
+                        incoming().createdAt == request.time;
+        allow delete: if request.auth != null && (request.auth.uid == existing().userId || isAdmin());
+        allow update: if false;
+      }
+    }
+
+    match /admins/{adminId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    match /clicks/{clickId} {
+      allow read: if isPrivileged();
+      allow create: if true; 
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isPrivileged();
+      allow create: if true;
+      allow update: if isPrivileged();
+    }
+
+    match /users/{userId} {
+      allow read: if true; // Public profiles
+      allow write: if request.auth != null && request.auth.uid == userId;
+
+      match /favorites/{toolId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId && 
+                      isValidId(toolId) &&
+                      (request.method == "delete" || (
+                        incoming().toolId == toolId &&
+                        incoming().createdAt == request.time
+                      ));
+      }
+
+      match /activity/{activityId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId &&
+                       incoming().timestamp == request.time;
+        allow update, delete: if false; // Activities are immutable logs
+      }
+    }
+  }
+}

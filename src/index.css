@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 overflow-x-hidden;
+  }
+}
+
+.galaxy-bg {
+  position: fixed;
+  top: -10%;
+  left: -10%;
+  width: 120%;
+  height: 120%;
+  background: 
+    radial-gradient(circle at 50% 50%, rgba(2, 6, 23, 0.2) 0%, rgba(2, 6, 23, 0.9) 100%),
+    url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&q=80&w=2022&ixlib=rb-4.0.3');
+  background-size: cover;
+  background-position: center;
+  z-index: -20;
+  animation: galaxy-complex-drift 180s ease-in-out infinite alternate;
+  filter: brightness(0.5) saturate(1.2) contrast(1.1);
+}
+
+.nebula-overlay {
+  position: fixed;
+  inset: 0;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(147, 51, 234, 0.05) 0%, transparent 40%);
+  z-index: -18;
+  animation: nebula-pulse 20s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.stars-1, .stars-2, .stars-3 {
+  position: fixed;
+  inset: -100px;
+  background-repeat: repeat;
+  z-index: -15;
+  pointer-events: none;
+}
+
+.stars-1 {
+  background-image: radial-gradient(1px 1px at 20px 30px, #fff, rgba(0,0,0,0)),
+                    radial-gradient(1.5px 1.5px at 150px 200px, #fff, rgba(0,0,0,0));
+  background-size: 300px 300px;
+  opacity: 0.3;
+  animation: star-drift-slow 100s linear infinite;
+}
+
+.stars-2 {
+  background-image: radial-gradient(1px 1px at 400px 100px, #fff, rgba(0,0,0,0)),
+                    radial-gradient(1.2px 1.2px at 50px 400px, #fff, rgba(0,0,0,0));
+  background-size: 450px 450px;
+  opacity: 0.2;
+  animation: star-drift-med 150s linear infinite;
+}
+
+.stars-3 {
+  background-image: radial-gradient(2px 2px at 250px 250px, #fff, rgba(0,0,0,0));
+  background-size: 600px 600px;
+  opacity: 0.1;
+  animation: star-drift-v-slow 200s linear infinite;
+}
+
+@keyframes galaxy-complex-drift {
+  0% { transform: scale(1.1) rotate(0deg) translate(0, 0); }
+  50% { transform: scale(1) rotate(2deg) translate(-2%, -2%); }
+  100% { transform: scale(1.1) rotate(0deg) translate(0, 0); }
+}
+
+@keyframes nebula-pulse {
+  0%, 100% { opacity: 0.4; filter: blur(50px); }
+  50% { opacity: 0.8; filter: blur(80px); }
+}
+
+@keyframes star-drift-slow {
+  from { transform: translateY(0); }
+  to { transform: translateY(-300px); }
+}
+
+@keyframes star-drift-med {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-450px, -450px); }
+}
+
+@keyframes star-drift-v-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.1);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+.onboarding-galaxy {
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(circle at 50% 50%, rgba(2, 6, 23, 0.4) 0%, rgba(2, 6, 23, 1) 100%),
+    url('https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&q=80&w=2013&ixlib=rb-4.0.3');
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+  animation: onboarding-galaxy-scale 60s ease-in-out infinite alternate;
+  filter: brightness(0.6) contrast(1.1);
+  pointer-events: none;
+}
+
+@keyframes onboarding-galaxy-scale {
+  from { transform: scale(1); }
+  to { transform: scale(1.2); }
+}

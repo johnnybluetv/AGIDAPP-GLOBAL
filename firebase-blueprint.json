@@ -1,0 +1,186 @@
+{
+  "entities": {
+    "AiTool": {
+      "title": "AI Tool",
+      "description": "A directory entry for an AI tool",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the tool" },
+        "category": { "type": "string", "enum": ["LLM & Chat", "Image & Art", "Developer Tools", "Productivity", "Audio & Video", "Other"] },
+        "type": { "type": "string", "enum": ["Web App", "Software (Desktop)", "Mobile / APK", "API / Platform"] },
+        "url": { "type": "string", "format": "uri" },
+        "apk": { "type": "string", "description": "Optional download link for APK" },
+        "desc": { "type": "string", "description": "Description of the tool" },
+        "upvotes": { "type": "integer", "description": "Count of upvotes" },
+        "visitCount": { "type": "integer", "description": "Count of times users visited the official site" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "authorId": { "type": "string", "description": "UID of the user who submitted the tool" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "instagram": { "type": "string", "description": "Instagram profile link" },
+        "tiktok": { "type": "string", "description": "TikTok profile link" },
+        "youtube": { "type": "string", "description": "YouTube channel link" },
+        "facebook": { "type": "string", "description": "Facebook page link" },
+        "linkedin": { "type": "string", "description": "LinkedIn profile link" },
+        "gmail": { "type": "string", "description": "Contact email" }
+      },
+      "required": ["name", "category", "type", "url", "desc", "upvotes", "createdAt"]
+    },
+    "ClickLog": {
+      "title": "Click Log",
+      "description": "Analytics for clicks on tools and social links",
+      "type": "object",
+      "properties": {
+        "toolId": { "type": "string" },
+        "toolName": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["visit", "social_click", "internal_view"] },
+        "platform": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "country": { "type": "string" },
+            "city": { "type": "string" },
+            "region": { "type": "string" },
+            "ip": { "type": "string" }
+          }
+        }
+      },
+      "required": ["toolId", "timestamp", "type"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Notification for admins about activities",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["type", "message", "timestamp", "read"]
+    }
+,
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Extended user information",
+      "type": "object",
+      "properties": {
+        "bio": { "type": "string" },
+        "website": { "type": "string" },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "UserActivity": {
+      "title": "User Activity",
+      "description": "Log of user actions",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["submission", "favorite", "upvote"] },
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "targetId", "timestamp"]
+    },
+    "UserFavorite": {
+      "title": "User Favorite",
+      "description": "A mapping of a tool favorited by a user",
+      "type": "object",
+      "properties": {
+        "toolId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["toolId", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on an AI tool",
+      "type": "object",
+      "properties": {
+        "toolId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["toolId", "userId", "userName", "text", "createdAt"]
+    },
+    "AdminRole": {
+      "title": "Admin Role",
+      "description": "Authorized roles for directory management",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Manager", "Editor"] },
+        "addedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "Article": {
+      "title": "Article",
+      "description": "An article about AI or AGI tools",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorEmail": { "type": "string" },
+        "authorRole": { "type": "string", "enum": ["Admin", "Manager", "Editor", "User"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["published", "draft"] },
+        "views": { "type": "integer", "description": "Count of times the article was viewed" },
+        "mediaUrl": { "type": "string", "description": "Optional URL for image or video" },
+        "mediaType": { "type": "string", "enum": ["image", "video"] },
+        "videoEmbedUrl": { "type": "string", "description": "Optional YouTube/Vimeo embed URL" }
+      },
+      "required": ["title", "content", "authorId", "authorName", "authorRole", "createdAt", "updatedAt", "status"]
+    }
+  },
+  "firestore": {
+    "articles": {
+      "schema": "Article",
+      "description": "Collection of articles about AI/AGI tools"
+    },
+    "ai_tools": {
+      "schema": "AiTool",
+      "description": "Collection of AI tools for the directory"
+    },
+    "ai_tools/{toolId}/comments": {
+      "schema": "Comment",
+      "description": "Sub-collection of comments for a specific tool"
+    },
+    "clicks": {
+      "schema": "ClickLog",
+      "description": "Log of all analytical clicks"
+    },
+    "notifications": {
+      "schema": "Notification",
+      "description": "Admin notifications for signups and actions"
+    },
+    "admins": {
+      "schema": "AdminRole",
+      "description": "Privileged users for the directory"
+    },
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Profile document for a specific user"
+    },
+    "users/{userId}/favorites": {
+      "schema": "UserFavorite",
+      "description": "Sub-collection of tools favorited by a specific user"
+    },
+    "users/{userId}/activity": {
+      "schema": "UserActivity",
+      "description": "Log of historical actions for the user"
+    }
+  }
+}
