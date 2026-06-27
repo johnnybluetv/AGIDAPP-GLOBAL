@@ -17,6 +17,7 @@ export interface AiTool {
   averageRating?: number;
   totalRatingsCount?: number;
   visitCount?: number;
+  mediaFiles?: { url: string; type: 'image' | 'video' | 'document'; name: string }[];
   // Social links
   instagram?: string;
   tiktok?: string;
@@ -50,10 +51,16 @@ export interface UserProfile {
   bio?: string;
   website?: string;
   skills?: string[];
+  headline?: string;
+  currentPosition?: string;
+  location?: string;
+  endorsements?: Record<string, string[]>; // skill -> user UIDs list
+  recommendations?: { id: string; fromId: string; fromName: string; fromPhoto?: string; text: string; createdAt: any }[];
   updatedAt: any;
   lastSeen?: any;
   followersCount?: number;
   followingCount?: number;
+  connectionsCount?: number;
 }
 
 export interface UserActivity {

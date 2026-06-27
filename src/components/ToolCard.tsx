@@ -1,6 +1,6 @@
 import * as React from "react";
 import { AiTool } from "../types";
-import { ThumbsUp, Globe, Download, ExternalLink, Share2, Edit, Trash2, Maximize2, Heart, MessageSquare, BarChart3, Twitter, Facebook, Linkedin, X, Send, Mail, Link2, Smartphone, Type as Typography, Radio, Play, Camera, Hash, Ghost, Cloud, Zap, Layout, BookOpen, Star, Instagram, Youtube, Music, Globe as GlobeIcon, X as CloseIcon, QrCode, Check } from "lucide-react";
+import { ThumbsUp, Globe, Download, ExternalLink, Share2, Edit, Trash2, Maximize2, Heart, MessageSquare, BarChart3, Twitter, Facebook, Linkedin, X, Send, Mail, Link2, Smartphone, Type as Typography, Radio, Play, Camera, Hash, Ghost, Cloud, Zap, Layout, BookOpen, Star, Instagram, Youtube, Music, Globe as GlobeIcon, X as CloseIcon, QrCode, Check, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { doc, updateDoc, increment, setDoc, deleteDoc, serverTimestamp, collection, onSnapshot, query, addDoc } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
@@ -62,9 +62,11 @@ interface ToolCardProps {
   onDelete: () => void;
   onShare: () => void;
   isFeatured?: boolean;
+  isComparing?: boolean;
+  onCompareToggle?: () => void;
 }
 
-export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, onShare, isFeatured }: ToolCardProps) {
+export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, onShare, isFeatured, isComparing, onCompareToggle }: ToolCardProps) {
   const { user, login } = useAuth();
   const [isUpvoted, setIsUpvoted] = React.useState(false);
   const [commentsCount, setCommentsCount] = React.useState<number>(0);
@@ -345,9 +347,34 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
             onClick={onView}
             aria-label={`View details for ${tool.name}`}
           >
-            <p className="text-sm text-slate-300 line-clamp-2 min-h-[3rem] mb-4">
+            <p className="text-sm text-slate-300 line-clamp-2 min-h-[2.5rem] mb-2 group-hover/content:text-white transition-colors duration-300">
               {tool.desc}
             </p>
+
+            {/* Read More elegant kinetic link/badge */}
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="inline-flex items-center gap-1.5 text-xs font-black text-blue-400 group-hover/content:text-blue-300 transition-all mb-4 mt-1 relative"
+            >
+              <span className="uppercase tracking-widest text-[9px] bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20 shadow-sm relative overflow-hidden group-hover/content:bg-blue-600/20 group-hover/content:border-blue-500/40 transition-all">
+                Read More
+                {/* Micro-shimmer/shine effect on hover */}
+                <motion.span 
+                  initial={{ x: "-100%" }}
+                  whileHover={{ x: "100%" }}
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                />
+              </span>
+              <motion.span
+                animate={{ x: [0, 4, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                className="flex items-center"
+              >
+                <ChevronRight className="w-3.5 h-3.5 text-blue-400 group-hover/content:translate-x-1.5 transition-transform" />
+              </motion.span>
+            </motion.div>
 
           {tool.tags && tool.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-4" aria-label="Tags">
@@ -583,13 +610,29 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
                 onClick={handleToggleFavorite}
                 aria-pressed={isFavorited}
                 aria-label={isFavorited ? "Remove from Favorites" : "Add to Favorites"}
-                className={`p-2.5 sm:p-3 rounded-xl border transition-all flex items-center justify-center ${
+                className={`p-2.5 sm:p-3 rounded-xl border transition-all flex items-center justify-center cursor-pointer ${
                   isFavorited
                   ? "bg-red-500/10 text-red-500 border-red-500/30"
                   : "bg-slate-800 text-slate-400 border-slate-700 hover:text-red-400 focus:ring-2 focus:ring-red-500/50"
                 }`}
               >
                 <Heart className={`w-4 h-4 sm:w-5 h-5 ${isFavorited ? "fill-current" : ""}`} aria-hidden="true" />
+              </motion.button>
+            </Tooltip>
+
+            {/* Compare Tool button */}
+            <Tooltip text={isComparing ? "Remove from Comparison" : "Add to Comparison (Max 3)"}>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={(e) => { e.stopPropagation(); onCompareToggle?.(); }}
+                className={`p-2.5 sm:p-3 rounded-xl border transition-all flex items-center justify-center cursor-pointer ${
+                  isComparing
+                  ? "bg-orange-500/20 text-orange-400 border-orange-500/40 shadow-[0_0_15px_rgba(249,115,22,0.3)]"
+                  : "bg-slate-800 text-slate-400 border-slate-700 hover:text-orange-400 hover:border-orange-500/20"
+                }`}
+              >
+                <BarChart3 className={`w-4 h-4 sm:w-5 h-5 ${isComparing ? "text-orange-400 stroke-[2.5]" : ""}`} aria-hidden="true" />
               </motion.button>
             </Tooltip>
           </div>

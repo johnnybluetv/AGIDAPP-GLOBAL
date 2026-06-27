@@ -130,3 +130,137 @@
   from { transform: scale(1); }
   to { transform: scale(1.2); }
 }
+
+/* ==========================================
+   PREMIUM LIGHT MODE STYLING OVERRIDES
+   ========================================== */
+.light {
+  color-scheme: light;
+}
+
+.light body {
+  background-color: #f8fafc !important; /* bg-slate-50 */
+  color: #0f172a !important; /* text-slate-900 */
+}
+
+/* Hide cosmic starry effects and ambient nebulas */
+.light .galaxy-bg,
+.light .nebula-overlay,
+.light .stars-1,
+.light .stars-2,
+.light .stars-3,
+.light .stars {
+  display: none !important;
+}
+
+/* Light Mode Card & Container Adaptations */
+.light .bg-slate-950,
+.light .bg-slate-900,
+.light .bg-slate-900\/50,
+.light .bg-slate-950\/95,
+.light .bg-slate-950\/45,
+.light .bg-slate-950\/80,
+.light .bg-slate-950\/40,
+.light .bg-slate-900\/95,
+.light .bg-slate-900\/80,
+.light .bg-slate-800,
+.light .bg-slate-800\/50,
+.light .bg-slate-850 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Modal and Dropdown Glassmorphism */
+.light .backdrop-blur-xl,
+.light .backdrop-blur-2xl,
+.light .backdrop-blur-md {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(24px) !important;
+}
+
+/* Specific button / element states in light mode */
+.light .text-slate-300,
+.light .text-slate-400,
+.light .text-slate-500 {
+  color: #475569 !important; /* text-slate-600 */
+}
+
+.light .text-white,
+.light .text-slate-100 {
+  color: #0f172a !important; /* text-slate-900 */
+}
+
+/* Borders */
+.light .border-slate-800,
+.light .border-slate-700,
+.light .border-slate-750,
+.light .border-slate-700\/50,
+.light .border-white\/5,
+.light .border-white\/10 {
+  border-color: #e2e8f0 !important; /* border-slate-200 */
+}
+
+/* Inputs and Search bars */
+.light input,
+.light select,
+.light textarea {
+  background-color: #f1f5f9 !important; /* slate-100 */
+  border-color: #cbd5e1 !important; /* slate-300 */
+  color: #0f172a !important;
+}
+
+.light input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Grid & Layout overrides */
+.light .bg-blue-600\/20 {
+  background-color: #eff6ff !important; /* blue-50 */
+}
+
+/* Subtitles, small labels */
+.light .text-blue-500\/80 {
+  color: #2563eb !important; /* blue-600 */
+}
+
+/* Glow effects to light mode shadows */
+.light .shadow-2xl,
+.light .shadow-xl {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Make sure active spotlight links are prominent in light mode */
+.light .hover\:border-blue-500\/30:hover {
+  border-color: #3b82f6 !important;
+}
+
+.light table {
+  color: #0f172a !important;
+}
+
+.light th {
+  color: #64748b !important; /* text-slate-500 */
+  border-color: #e2e8f0 !important;
+}
+
+.light td {
+  border-color: #f1f5f9 !important;
+}
+
+/* Shaking tab/button animation for the stand-out Cloud button */
+@keyframes dynamic-shake {
+  0%, 100% { transform: translateX(0); }
+  5% { transform: translateX(-3px) rotate(-1deg); }
+  10% { transform: translateX(3px) rotate(1deg); }
+  15% { transform: translateX(-3px) rotate(-1deg); }
+  20% { transform: translateX(3px) rotate(1deg); }
+  25% { transform: translateX(-2px) rotate(0deg); }
+  30% { transform: translateX(2px) rotate(0deg); }
+  35%, 100% { transform: translateX(0); }
+}
+
+.shake-every-second {
+  animation: dynamic-shake 1.5s ease-in-out infinite;
+  will-change: transform;
+}
+

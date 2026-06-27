@@ -2,9 +2,10 @@ import * as React from "react";
 import { onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { AiTool, CATEGORIES, Category, UserRole } from "./types";
-import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronRight, BookOpen, Star, Users, BarChart, Cloud } from "lucide-react";
+import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronRight, BookOpen, Star, Users, BarChart, Cloud, Sun, Moon, ArrowLeftRight, Image as ImageIcon, FileText } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useSpring } from "motion/react";
 import ToolCard from "./components/ToolCard";
+import { Sparkles, Palette, Code2, Box, Video as VideoIcon } from "lucide-react";
 import SkeletonCard from "./components/SkeletonCard";
 import SubmitForm from "./components/SubmitForm";
 import UserProfile from "./components/UserProfile";
@@ -14,6 +15,7 @@ import RelatedTools from "./components/RelatedTools";
 import ArticleSubmitForm from "./components/ArticleSubmitForm";
 import ArticlesList from "./components/ArticlesList";
 import Onboarding from "./components/Onboarding";
+import SoundActivationModal from "./components/SoundActivationModal";
 import LogoSnowfall from "./components/LogoSnowfall";
 import UserWaterfall from "./components/UserWaterfall";
 import StatsDashboard from "./components/StatsDashboard";
@@ -61,6 +63,205 @@ export default function App() {
   const [showInsights, setShowInsights] = React.useState(false);
   const [showDrive, setShowDrive] = React.useState(false);
 
+  // Compare Mode State
+  const [comparedTools, setComparedTools] = React.useState<AiTool[]>([]);
+  const [showComparisonModal, setShowComparisonModal] = React.useState(false);
+
+  const toggleCompareTool = (tool: AiTool) => {
+    setComparedTools(prev => {
+      if (prev.some(t => t.id === tool.id)) {
+        return prev.filter(t => t.id !== tool.id);
+      }
+      if (prev.length >= 3) {
+        setToast({ message: "You can compare up to 3 tools maximum", type: 'error' });
+        return prev;
+      }
+      return [...prev, tool];
+    });
+  };
+
+  // Theme State
+  const [theme, setTheme] = React.useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+  });
+
+  // Spinning Galaxy State
+  const [showSpinningGalaxy, setShowSpinningGalaxy] = React.useState(false);
+
+  // Sound preference state
+  const [soundPreference, setSoundPreference] = React.useState<'enabled' | 'disabled' | 'unasked'>(() => {
+    try {
+      const saved = localStorage.getItem('sound_preference');
+      if (saved === 'enabled' || saved === 'disabled') return saved;
+    } catch {}
+    return 'unasked';
+  });
+
+  // Synthesize rich, high-fidelity interactive sounds using Web Audio API (license-free, public domain)
+  const playRandomInteractiveSound = React.useCallback(() => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      
+      const ctx = new AudioContextClass();
+      
+      // Main compression and gain control
+      const mainGain = ctx.createGain();
+      mainGain.gain.setValueAtTime(0.12, ctx.currentTime);
+      mainGain.connect(ctx.destination);
+
+      const playBubble = () => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.connect(gain);
+        gain.connect(mainGain);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      };
+
+      const playTechBlip = () => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.setValueAtTime(1760, ctx.currentTime + 0.03);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.connect(gain);
+        gain.connect(mainGain);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      };
+
+      const playBellChime = () => {
+        const freqs = [587.33, 880, 1174.66, 1318.51];
+        freqs.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, ctx.currentTime);
+          const delay = i * 0.015;
+          const duration = 0.35 - (i * 0.04);
+          gain.gain.setValueAtTime(0, ctx.currentTime);
+          gain.gain.setValueAtTime(0.08, ctx.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+          osc.connect(gain);
+          gain.connect(mainGain);
+          osc.start(ctx.currentTime + delay);
+          osc.stop(ctx.currentTime + delay + duration + 0.05);
+        });
+      };
+
+      const playArcadeCoin = () => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(987.77, ctx.currentTime);
+        osc.frequency.setValueAtTime(1318.51, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(mainGain);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      };
+
+      const playWoodBlock = () => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(mainGain);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.06);
+      };
+
+      const playTwinkle = () => {
+        const baseFreq = 1100;
+        for (let i = 0; i < 4; i++) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(baseFreq + (i * 280), ctx.currentTime + i * 0.035);
+          gain.gain.setValueAtTime(0, ctx.currentTime);
+          gain.gain.setValueAtTime(0.06, ctx.currentTime + i * 0.035);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.035 + 0.15);
+          osc.connect(gain);
+          gain.connect(mainGain);
+          osc.start(ctx.currentTime + i * 0.035);
+          osc.stop(ctx.currentTime + i * 0.035 + 0.2);
+        }
+      };
+
+      const playMechanicalClick = () => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(1500, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(250, ctx.currentTime + 0.012);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.012);
+        osc.connect(gain);
+        gain.connect(mainGain);
+        
+        const bufferSize = ctx.sampleRate * 0.006;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.1, ctx.currentTime);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.006);
+        noise.connect(noiseGain);
+        noiseGain.connect(mainGain);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + 0.02);
+        noise.start();
+        noise.stop(ctx.currentTime + 0.02);
+      };
+
+      const sounds = [
+        playBubble,
+        playTechBlip,
+        playBellChime,
+        playArcadeCoin,
+        playWoodBlock,
+        playTwinkle,
+        playMechanicalClick
+      ];
+
+      const randomIdx = Math.floor(Math.random() * sounds.length);
+      sounds[randomIdx]();
+    } catch (e) {
+      console.warn("Could not play synthesized sound:", e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'light') {
+      root.classList.add('light');
+      root.classList.remove('dark');
+    } else {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
   const screenConfigs = {
     Fluid: { width: "100%", height: "100%", scale: 1 },
     Mobile: { width: "375px", height: "667px", scale: 0.8 },
@@ -80,6 +281,7 @@ export default function App() {
   // Suggestions state
   const [suggestions, setSuggestions] = React.useState<AiTool[]>([]);
   const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const [isSearchFocused, setIsSearchFocused] = React.useState(false);
 
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
@@ -202,6 +404,41 @@ export default function App() {
     localStorage.setItem("agid_onboarding_seen", "true");
     setShowOnboarding(false);
   };
+
+  // Play dynamic interactive sounds on every click / tap if enabled
+  React.useEffect(() => {
+    if (soundPreference !== "enabled") return;
+
+    const handleGlobalClick = () => {
+      playRandomInteractiveSound();
+    };
+
+    window.addEventListener("click", handleGlobalClick, { capture: true });
+    return () => {
+      window.removeEventListener("click", handleGlobalClick, { capture: true });
+    };
+  }, [playRandomInteractiveSound, soundPreference]);
+
+  // Handle background spinning galaxy timer (every 5 minutes, appears for 3 seconds)
+  React.useEffect(() => {
+    const triggerGalaxy = () => {
+      setShowSpinningGalaxy(true);
+      setTimeout(() => {
+        setShowSpinningGalaxy(false);
+      }, 3000);
+    };
+
+    // Trigger on initial load after 1 second so the user can see it immediately
+    const initialTimer = setTimeout(triggerGalaxy, 1000);
+
+    // Set interval for every 5 minutes (300,000 ms)
+    const intervalId = setInterval(triggerGalaxy, 300000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(intervalId);
+    };
+  }, []);
 
   // Fuse instance for fuzzy search
   const fuse = React.useMemo(() => {
@@ -403,6 +640,36 @@ export default function App() {
 
     return intents;
   }, [searchQuery]);
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case "LLM & Chat":
+        return <MessageSquare className="w-3.5 h-3.5 text-blue-400" />;
+      case "Image & Art":
+        return <Sparkles className="w-3.5 h-3.5 text-pink-400" />;
+      case "Developer Tools":
+        return <Code2 className="w-3.5 h-3.5 text-emerald-400" />;
+      case "Productivity":
+        return <Zap className="w-3.5 h-3.5 text-amber-400" />;
+      case "Audio & Video":
+        return <VideoIcon className="w-3.5 h-3.5 text-indigo-400" />;
+      default:
+        return <Box className="w-3.5 h-3.5 text-slate-400" />;
+    }
+  };
+
+  // Group suggestions by category while keeping original index
+  const groupedSuggestions = React.useMemo(() => {
+    const groups: Record<string, Array<{ tool: AiTool; originalIndex: number }>> = {};
+    suggestions.forEach((tool, originalIndex) => {
+      const category = tool.category || "Other";
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push({ tool, originalIndex });
+    });
+    return groups;
+  }, [suggestions]);
 
   const filteredTools = React.useMemo(() => {
     let result = tools;
@@ -852,6 +1119,60 @@ export default function App() {
               <Zap className={`w-4 h-4 ${isScraping ? 'animate-pulse text-blue-400' : 'text-blue-500'}`} />
               {isScraping ? 'INDEXING_CORE_MODELS...' : 'Index Popular AIs'}
             </button>
+            {/* Enhanced Theme Toggle */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-all flex items-center justify-center relative overflow-hidden shadow-lg group cursor-pointer"
+              title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              <AnimatePresence mode="wait">
+                {theme === 'dark' ? (
+                  <motion.div
+                    key="dark"
+                    initial={{ y: -10, opacity: 0, rotate: -45 }}
+                    animate={{ y: 0, opacity: 1, rotate: 0 }}
+                    exit={{ y: 10, opacity: 0, rotate: 45 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="flex items-center justify-center text-amber-400"
+                  >
+                    <Moon className="w-5 h-5 fill-current" />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="light"
+                    initial={{ y: -10, opacity: 0, rotate: -45 }}
+                    animate={{ y: 0, opacity: 1, rotate: 0 }}
+                    exit={{ y: 10, opacity: 0, rotate: 45 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="flex items-center justify-center text-orange-500"
+                  >
+                    <Sun className="w-5 h-5 fill-current" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.button>
+
+            {/* Compare Shortcut Badge */}
+            <AnimatePresence>
+              {comparedTools.length > 0 && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowComparisonModal(true)}
+                  className="relative p-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(249,115,22,0.25)]"
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                  <span className="hidden sm:inline">Compare</span>
+                  <span className="bg-orange-500 text-slate-950 font-black rounded-full w-4.5 h-4.5 flex items-center justify-center text-[9px] -mr-1">{comparedTools.length}</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
+
             <motion.a 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -998,231 +1319,269 @@ export default function App() {
 
               {/* Discovery Bar */}
             <div className="max-w-5xl mx-auto space-y-4">
-              <div 
-                role="search"
-                aria-label="Find AI tools"
-                className="bg-slate-900/60 backdrop-blur-2xl border border-white/10 p-3 rounded-3xl flex flex-col lg:flex-row gap-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.6)] relative"
-              >
-                <div className="flex-1 relative group/search">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 z-10" aria-hidden="true" />
-                  
-                  {/* Natural Language Intent Indicators */}
+              <div className={`p-[1.5px] rounded-3xl transition-all duration-300 ${
+                isSearchFocused 
+                ? 'bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-400 shadow-[0_0_25px_rgba(249,115,22,0.25)] ring-1 ring-orange-500/30' 
+                : 'bg-white/10 hover:bg-white/15 hover:shadow-[0_0_15px_rgba(249,115,22,0.05)]'
+              }`}>
+                <div 
+                  role="search"
+                  aria-label="Find AI tools"
+                  className="bg-slate-950/95 backdrop-blur-2xl p-3 rounded-[22px] flex flex-col lg:flex-row gap-2 relative w-full"
+                >
+                  <div className="flex-1 relative group/search bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-400 rounded-2xl border border-yellow-300/30 shadow-[0_0_20px_rgba(250,204,21,0.15)] overflow-hidden">
+                    <Search className={`absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 z-10 transition-all duration-300 ${isSearchFocused ? 'text-slate-950 scale-110' : 'text-slate-900'}`} aria-hidden="true" />
+                    
+                    {/* Natural Language Intent Indicators */}
+                    <AnimatePresence>
+                      {interpretedQuery && Object.values(interpretedQuery).some(v => v) && (
+                        <motion.div 
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          className="absolute left-14 top-2 flex gap-1 pointer-events-none z-20"
+                        >
+                          {interpretedQuery.isFree && <span className="text-[7px] font-black uppercase bg-slate-950 text-green-400 px-1 rounded border border-slate-900">Free</span>}
+                          {interpretedQuery.isMobile && <span className="text-[7px] font-black uppercase bg-slate-950 text-blue-400 px-1 rounded border border-slate-900">Mobile</span>}
+                          {interpretedQuery.isDev && <span className="text-[7px] font-black uppercase bg-slate-950 text-amber-400 px-1 rounded border border-slate-900">Developer</span>}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Auto-complete ghost text */}
+                  {searchQuery && suggestions.length > 0 && (
+                    (() => {
+                      const searchLower = searchQuery.toLowerCase();
+                      const firstSuggestion = suggestions[0];
+                      let completion = "";
+                      
+                      if (searchLower.startsWith('#')) {
+                        const tagQuery = searchLower.substring(1).trim();
+                        const matchedTag = firstSuggestion.tags?.find(t => t.toLowerCase().startsWith(tagQuery));
+                        if (matchedTag) {
+                          completion = `#${matchedTag}`;
+                        }
+                      } else if (firstSuggestion.name.toLowerCase().startsWith(searchLower)) {
+                        completion = firstSuggestion.name;
+                      }
+                      
+                      if (completion && completion.toLowerCase().startsWith(searchLower)) {
+                         return (
+                          <div className="absolute left-14 top-1/2 -translate-y-1/2 text-slate-950 pointer-events-none font-semibold whitespace-pre">
+                            <span className="opacity-0">{searchQuery}</span>
+                            <span className="opacity-45">{completion.substring(searchQuery.length)}</span>
+                            <span className="ml-2 text-[8px] bg-slate-950 text-yellow-400 px-1.5 py-0.5 rounded border border-slate-900 font-black uppercase tracking-tighter shadow-sm animate-pulse">Tab to Complete</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()
+                  )}
+
+                  <input 
+                    id="search-input"
+                    type="text" 
+                    autoComplete="off"
+                    role="combobox"
+                    aria-expanded={showSuggestions}
+                    aria-controls="search-suggestions"
+                    aria-haspopup="listbox"
+                    aria-label="Search by name, category, or functionality"
+                    placeholder="Ask for ChatGPT, Midjourney, or SDKs..."
+                    className="w-full bg-transparent border-none px-14 py-4 text-slate-950 focus:outline-none placeholder:text-slate-800/60 font-bold relative z-10"
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        setShowSuggestions(false);
+                        setIsSearchFocused(false);
+                      }, 250);
+                    }}
+                    onFocus={() => {
+                      setIsSearchFocused(true);
+                      if (searchQuery.length > 0) {
+                        setShowSuggestions(true);
+                      }
+                    }}
+                  />
+
+                  {/* Search Footer Tips */}
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-3 z-20">
+                    <VoiceSearch onResult={(text) => handleSearchChange(text)} />
+                    <div className="flex gap-1">
+                      <kbd className="px-1.5 py-0.5 bg-slate-950 border border-slate-900 rounded text-[9px] text-yellow-400 font-mono">#</kbd>
+                      <span className="text-[9px] text-slate-900 font-black uppercase tracking-tighter">to search tags</span>
+                    </div>
+                  </div>
+
+                  {/* Suggestions Dropdown grouped by Category with full Keyboard Navigation */}
                   <AnimatePresence>
-                    {interpretedQuery && Object.values(interpretedQuery).some(v => v) && (
-                      <motion.div 
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        className="absolute left-14 top-2 flex gap-1 pointer-events-none z-20"
+                    {showSuggestions && suggestions.length > 0 && (
+                      <motion.div
+                        id="search-suggestions"
+                        role="listbox"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute top-full left-0 right-0 mt-3 bg-slate-950/98 border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden max-h-[480px] overflow-y-auto custom-scrollbar backdrop-blur-xl"
                       >
-                        {interpretedQuery.isFree && <span className="text-[7px] font-black uppercase bg-green-500/10 text-green-400 px-1 rounded border border-green-500/20">Free</span>}
-                        {interpretedQuery.isMobile && <span className="text-[7px] font-black uppercase bg-blue-500/10 text-blue-400 px-1 rounded border border-blue-500/20">Mobile</span>}
-                        {interpretedQuery.isDev && <span className="text-[7px] font-black uppercase bg-amber-500/10 text-amber-400 px-1 rounded border border-amber-500/20">Developer</span>}
+                        <div className="p-3 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 flex justify-between items-center bg-slate-900/50">
+                          <span className="flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-orange-400 animate-pulse" />
+                            Categorized AI Tools
+                          </span>
+                          <span className="text-[9px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-bold">{suggestions.length} Found</span>
+                        </div>
+
+                        {Object.entries(groupedSuggestions).map(([category, items]) => (
+                          <div key={category} className="border-b border-white/5 last:border-none">
+                            {/* Category Sub-header */}
+                            <div className="py-2.5 px-6 flex items-center gap-2 bg-slate-900/30 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-white/5">
+                              {getCategoryIcon(category)}
+                              <span className="tracking-widest">{category}</span>
+                              <span className="ml-auto text-[8px] opacity-70 bg-white/5 px-1.5 py-0.5 rounded-full">{items.length} matched</span>
+                            </div>
+
+                            {/* Grouped Tools with keyboard index sync */}
+                            {items.map(({ tool, originalIndex }) => (
+                              <button
+                                key={tool.id}
+                                role="option"
+                                aria-selected={originalIndex === focusedSuggestionIndex}
+                                onClick={() => {
+                                  setSearchQuery(tool.name);
+                                  setShowSuggestions(false);
+                                  setSelectedTool(tool);
+                                }}
+                                className={`w-full px-6 py-3.5 flex items-center justify-between transition-all border-b border-white/5 last:border-none group text-left cursor-pointer ${
+                                  originalIndex === focusedSuggestionIndex 
+                                  ? 'bg-orange-500/15 border-l-2 border-orange-500 text-white pl-5.5' 
+                                  : 'hover:bg-white/5 pl-6'
+                                }`}
+                              >
+                                <div className="flex items-center gap-4 text-left">
+                                  <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center p-1.5 border border-white/10 shadow-inner group-hover:bg-white/10 transition-colors">
+                                    <img 
+                                      src={`https://www.google.com/s2/favicons?domain=${new URL(tool.url).hostname}&sz=64`} 
+                                      alt=""
+                                      className="w-full h-full object-contain"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <p className="font-black text-white leading-tight group-hover:text-orange-400 transition-colors uppercase tracking-tight text-sm">
+                                      {tool.name}
+                                    </p>
+                                    <div className="flex items-center gap-2.5 mt-1">
+                                      <span className="text-[10px] text-orange-400 font-mono font-bold uppercase tracking-tighter bg-orange-400/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                        <ThumbsUp className="w-2.5 h-2.5" />
+                                        {tool.upvotes}
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{tool.category}</span>
+                                      <div className="w-1 h-1 rounded-full bg-slate-700" />
+                                      <span className="text-[9px] text-slate-500 font-medium uppercase tracking-widest">{tool.type}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className={`flex items-center gap-3 transition-all ${originalIndex === focusedSuggestionIndex ? 'text-orange-400 translate-x-0 opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0'}`}>
+                                  <div className="flex items-center gap-1">
+                                    {tool.tags?.slice(0, 2).map(tag => (
+                                      <span key={tag} className="text-[8px] text-slate-600 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-bold">#{tag}</span>
+                                    ))}
+                                  </div>
+                                  <ArrowUp className="w-4 h-4 rotate-45" />
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
                       </motion.div>
                     )}
                   </AnimatePresence>
-
-                  {/* Auto-complete ghost text */}
-                {searchQuery && suggestions.length > 0 && (
-                  (() => {
-                    const searchLower = searchQuery.toLowerCase();
-                    const firstSuggestion = suggestions[0];
-                    let completion = "";
-                    
-                    if (searchLower.startsWith('#')) {
-                      const tagQuery = searchLower.substring(1).trim();
-                      const matchedTag = firstSuggestion.tags?.find(t => t.toLowerCase().startsWith(tagQuery));
-                      if (matchedTag) {
-                        completion = `#${matchedTag}`;
-                      }
-                    } else if (firstSuggestion.name.toLowerCase().startsWith(searchLower)) {
-                      completion = firstSuggestion.name;
-                    }
-                    
-                    if (completion && completion.toLowerCase().startsWith(searchLower)) {
-                       return (
-                        <div className="absolute left-14 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none font-medium whitespace-pre">
-                          <span className="opacity-0">{searchQuery}</span>
-                          <span className="opacity-40">{completion.substring(searchQuery.length)}</span>
-                          <span className="ml-2 text-[8px] bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-700 font-black uppercase tracking-tighter shadow-sm animate-pulse">Tab to Complete</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()
-                )}
-
-                <input 
-                  id="search-input"
-                  type="text" 
-                  autoComplete="off"
-                  role="combobox"
-                  aria-expanded={showSuggestions}
-                  aria-controls="search-suggestions"
-                  aria-haspopup="listbox"
-                  aria-label="Search by name, category, or functionality"
-                  placeholder="Ask for ChatGPT, Midjourney, or SDKs..."
-                  className="w-full bg-transparent border-none px-14 py-4 text-white focus:outline-none placeholder:text-slate-500 font-medium relative z-10"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                  onFocus={() => searchQuery.length > 0 && setShowSuggestions(true)}
-                />
-
-                {/* Search Footer Tips */}
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-3 z-20">
-                  <VoiceSearch onResult={(text) => handleSearchChange(text)} />
-                  <div className="flex gap-1">
-                    <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-400 font-mono">#</kbd>
-                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-tighter">to search tags</span>
-                  </div>
                 </div>
 
-                {/* Suggestions Dropdown */}
-                <AnimatePresence>
-                  {showSuggestions && suggestions.length > 0 && (
-                    <motion.div
-                      id="search-suggestions"
-                      role="listbox"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="absolute top-full left-0 right-0 mt-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden max-h-[480px] overflow-y-auto custom-scrollbar"
-                    >
-                      <div className="p-3 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 flex justify-between items-center bg-slate-950/50">
-                        <span>Top Results</span>
-                        <span>{suggestions.length} Found</span>
-                      </div>
-                      {suggestions.map((tool, idx) => (
-                        <button
-                          key={tool.id}
-                          role="option"
-                          aria-selected={idx === focusedSuggestionIndex}
-                          onClick={() => {
-                            setSearchQuery(tool.name);
-                            setShowSuggestions(false);
-                            setSelectedTool(tool);
-                          }}
-                          className={`w-full px-6 py-4 flex items-center justify-between transition-all border-b border-white/5 last:border-none group ${
-                            idx === focusedSuggestionIndex ? 'bg-blue-600/20' : 'hover:bg-white/5'
-                          }`}
-                        >
-                          <div className="flex items-center gap-4 text-left">
-                            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center p-1.5 border border-white/10 shadow-inner group-hover:bg-white/10 transition-colors">
-                              <img 
-                                src={`https://www.google.com/s2/favicons?domain=${new URL(tool.url).hostname}&sz=64`} 
-                                alt=""
-                                className="w-full h-full object-contain"
-                                referrerPolicy="no-referrer"
-                              />
-                            </div>
-                            <div className="flex flex-col">
-                              <p className="font-black text-white leading-tight group-hover:text-blue-400 transition-colors uppercase tracking-tight">{tool.name}</p>
-                              <div className="flex items-center gap-3 mt-1.5">
-                                <span className="text-[10px] text-blue-400 font-mono font-bold uppercase tracking-tighter bg-blue-400/10 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                  <ThumbsUp className="w-2.5 h-2.5" />
-                                  {tool.upvotes}
-                                </span>
-                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{tool.category}</span>
-                                <div className="w-1 h-1 rounded-full bg-slate-700" />
-                                <span className="text-[9px] text-slate-500 font-medium uppercase tracking-widest">{tool.type}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className={`flex items-center gap-3 transition-all ${idx === focusedSuggestionIndex ? 'text-blue-400 translate-x-0 opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0'}`}>
-                            <div className="flex items-center gap-1">
-                              {tool.tags?.slice(0, 2).map(tag => (
-                                <span key={tag} className="text-[8px] text-slate-600 border border-slate-800 px-1 rounded uppercase font-bold">#{tag}</span>
-                              ))}
-                            </div>
-                            <ArrowUp className="w-4 h-4 rotate-45" />
-                          </div>
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <div className="h-px lg:h-10 lg:w-px bg-slate-800 self-center mx-1" aria-hidden="true" />
-              
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <button
-                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                    className={`flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-bold transition-all border ${
-                      showAdvancedFilters 
-                      ? 'bg-blue-600/10 text-blue-500 border-blue-500/30' 
-                      : 'bg-slate-950/50 text-slate-400 border-white/5 hover:text-slate-200 hover:border-white/10'
-                    }`}
-                  >
-                    <Filter className="w-4 h-4" />
-                    <span className="text-[10px] uppercase tracking-widest font-black">Filters</span>
-                  </button>
-
-                  <div className="flex items-center px-4 gap-3 bg-slate-950/50 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
-                    <ArrowUp className="w-4 h-4 text-slate-400" aria-hidden="true" />
-                    <select 
-                      aria-label="Sort by"
-                      className="bg-transparent border-none text-white text-xs font-bold uppercase tracking-widest focus:outline-none flex-1 py-4 appearance-none cursor-pointer pr-4"
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as any)}
-                    >
-                      <option value="newest" className="bg-slate-900">Newest First</option>
-                      <option value="popular" className="bg-slate-900">Most Popular</option>
-                      <option value="rating" className="bg-slate-900">Highest Rated</option>
-                      <option value="alpha" className="bg-slate-900">Alphabetical (A-Z)</option>
-                    </select>
-                  </div>
-
-                  {user && (
-                    <button 
-                      aria-pressed={showFavoritesOnly}
-                      onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-                      title={showFavoritesOnly ? "Show All Tools" : "Show Favorites Only"}
-                      className={`flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-bold transition-all border ${
-                        showFavoritesOnly 
-                        ? 'bg-red-500/10 text-red-500 border-red-500/30' 
-                        : 'bg-slate-950/50 text-slate-400 border-white/5 hover:text-slate-200 hover:border-white/10'
+                <div className="h-px lg:h-10 lg:w-px bg-slate-800 self-center mx-1" aria-hidden="true" />
+                
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                      className={`flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-bold transition-all border cursor-pointer ${
+                        showAdvancedFilters 
+                        ? 'bg-orange-500/15 text-orange-400 border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.15)]' 
+                        : 'bg-slate-950/50 text-slate-400 border-white/5 hover:text-orange-400 hover:border-orange-500/20'
                       }`}
                     >
-                      <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-current' : ''}`} />
+                      <Filter className="w-4 h-4" />
+                      <span className="text-[10px] uppercase tracking-widest font-black">Filters</span>
                     </button>
-                  )}
 
-                  <button 
-                    onClick={() => {
-                      setShowInsights(!showInsights);
-                      if (!showInsights) {
-                        setShowDrive(false);
-                      }
-                    }}
-                    title={showInsights ? "Close Insights" : "Show Directory Insights"}
-                    className={`flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-bold transition-all border ${
-                      showInsights 
-                      ? 'bg-blue-600/10 text-blue-500 border-blue-500/30 shadow-lg shadow-blue-500/20' 
-                      : 'bg-slate-950/50 text-slate-400 border-white/5 hover:text-slate-200 hover:border-white/10'
-                    }`}
-                  >
-                    <BarChart className="w-5 h-5" />
-                  </button>
+                    <div className="flex items-center px-4 gap-3 bg-slate-950/50 rounded-2xl border border-white/5 hover:border-orange-500/20 hover:bg-slate-900 transition-colors">
+                      <ArrowUp className="w-4 h-4 text-slate-400" aria-hidden="true" />
+                      <select 
+                        aria-label="Sort by"
+                        className="bg-transparent border-none text-white text-xs font-bold uppercase tracking-widest focus:outline-none flex-1 py-4 appearance-none cursor-pointer pr-4"
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as any)}
+                      >
+                        <option value="newest" className="bg-slate-900">Newest First</option>
+                        <option value="popular" className="bg-slate-900">Most Popular</option>
+                        <option value="rating" className="bg-slate-900">Highest Rated</option>
+                        <option value="alpha" className="bg-slate-900">Alphabetical (A-Z)</option>
+                      </select>
+                    </div>
 
-                  <button 
-                    onClick={() => {
-                      setShowDrive(!showDrive);
-                      if (!showDrive) {
-                        setShowInsights(false);
-                      }
-                    }}
-                    title={showDrive ? "Close Cloud Storage" : "Google Drive Cloud"}
-                    className={`flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-bold transition-all border ${
-                      showDrive 
-                      ? 'bg-sky-500/10 text-sky-400 border-sky-500/30' 
-                      : 'bg-slate-950/50 text-slate-400 border-white/5 hover:text-slate-200 hover:border-white/10'
-                    }`}
-                  >
-                    <Cloud className="w-5 h-5" />
-                  </button>
+                    {user && (
+                      <button 
+                        aria-pressed={showFavoritesOnly}
+                        onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                        title={showFavoritesOnly ? "Show All Tools" : "Show Favorites Only"}
+                        className={`flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-bold transition-all border cursor-pointer ${
+                          showFavoritesOnly 
+                          ? 'bg-rose-500/15 text-rose-500 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.15)]' 
+                          : 'bg-slate-950/50 text-slate-400 border-white/5 hover:text-rose-400 hover:border-rose-500/20'
+                        }`}
+                      >
+                        <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-current' : ''}`} />
+                      </button>
+                    )}
+
+                    <button 
+                      onClick={() => {
+                        setShowInsights(!showInsights);
+                        if (!showInsights) {
+                          setShowDrive(false);
+                        }
+                      }}
+                      title={showInsights ? "Close Insights" : "Show Directory Insights"}
+                      className={`flex items-center justify-center gap-2 px-5 py-4 rounded-2xl font-bold transition-all border cursor-pointer ${
+                        showInsights 
+                        ? 'bg-blue-600/25 text-blue-400 border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.25)]' 
+                        : 'bg-slate-950/50 text-slate-400 border-white/5 hover:text-blue-400 hover:border-blue-500/20'
+                      }`}
+                    >
+                      <BarChart className="w-4 h-4" />
+                      <span className="text-[10px] uppercase tracking-widest font-black">Insights</span>
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        setShowDrive(!showDrive);
+                        if (!showDrive) {
+                          setShowInsights(false);
+                        }
+                      }}
+                      title={showDrive ? "Close Cloud Storage" : "Google Drive Cloud"}
+                      className={`flex items-center justify-center gap-2 px-5 py-4 rounded-2xl font-bold transition-all border cursor-pointer shake-every-second ${
+                        showDrive 
+                        ? 'bg-gradient-to-r from-sky-500/30 to-blue-500/30 text-sky-300 border-sky-400 shadow-[0_0_20px_rgba(14,165,233,0.4)]' 
+                        : 'bg-gradient-to-r from-sky-500/10 to-blue-500/10 text-sky-400 border-sky-500/30 hover:border-sky-400 shadow-[0_0_12px_rgba(14,165,233,0.2)]'
+                      }`}
+                    >
+                      <Cloud className="w-4 h-4 text-sky-400 animate-pulse" />
+                      <span className="text-[10px] uppercase tracking-widest font-black text-sky-400">Google Drive Cloud</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1386,6 +1745,8 @@ export default function App() {
                     tool={tool} 
                     isFeatured
                     isFavorited={favorites.includes(tool.id)}
+                    isComparing={comparedTools.some(t => t.id === tool.id)}
+                    onCompareToggle={() => toggleCompareTool(tool)}
                     onView={() => setSelectedTool(tool)}
                     onEdit={() => handleEditTool(tool)}
                     onDelete={() => setToolToDelete(tool)}
@@ -1476,6 +1837,8 @@ export default function App() {
                       key={tool.id} 
                       tool={tool} 
                       isFavorited={favorites.includes(tool.id)}
+                      isComparing={comparedTools.some(t => t.id === tool.id)}
+                      onCompareToggle={() => toggleCompareTool(tool)}
                       onView={() => setSelectedTool(tool)}
                       onEdit={() => handleEditTool(tool)}
                       onDelete={() => setToolToDelete(tool)}
@@ -1719,6 +2082,76 @@ export default function App() {
                         {selectedTool.desc}
                       </p>
                     </div>
+
+                    {/* Media Files Showcase */}
+                    {selectedTool.mediaFiles && selectedTool.mediaFiles.length > 0 && (
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                          <ImageIcon className="w-4 h-4 text-blue-400" /> Media Files & Banners
+                        </h4>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {selectedTool.mediaFiles.map((file, index) => (
+                            <div 
+                              key={`media-item-${index}`}
+                              className="group/media relative bg-slate-950 border border-slate-850 rounded-2xl overflow-hidden shadow-lg aspect-video flex items-center justify-center transition-all hover:border-blue-500/30"
+                            >
+                              {file.type === 'image' ? (
+                                <img 
+                                  src={file.url} 
+                                  alt={file.name} 
+                                  className="w-full h-full object-cover transition-transform duration-300 group-hover/media:scale-105"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : file.type === 'video' ? (
+                                <div className="w-full h-full relative">
+                                  <video 
+                                    src={file.url} 
+                                    controls 
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="p-6 text-center flex flex-col items-center gap-2">
+                                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-1">
+                                    <FileText className="w-6 h-6" />
+                                  </div>
+                                  <p className="text-xs font-black text-white truncate max-w-[180px] uppercase tracking-tight">{file.name}</p>
+                                  <a 
+                                    href={file.url} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="text-[10px] font-black text-blue-400 hover:underline uppercase tracking-wider flex items-center gap-1.5 mt-2 justify-center"
+                                  >
+                                    Download Doc
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                </div>
+                              )}
+
+                              {/* Hover overlay with filename */}
+                              {file.type !== 'document' && (
+                                <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-slate-950/90 to-transparent opacity-0 group-hover/media:opacity-100 transition-opacity duration-300 pointer-events-none">
+                                  <p className="text-[10px] font-black text-white uppercase tracking-wider truncate">{file.name}</p>
+                                </div>
+                              )}
+                              
+                              {/* Open link overlay */}
+                              {file.type === 'image' && (
+                                <a 
+                                  href={file.url} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="absolute top-3 right-3 p-1.5 bg-slate-900/90 border border-slate-800 rounded-lg text-slate-400 hover:text-white opacity-0 group-hover/media:opacity-100 transition-opacity"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        <a 
@@ -1995,6 +2428,327 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {soundPreference === "unasked" && (
+          <SoundActivationModal
+            onChoose={(enable) => {
+              const preference = enable ? "enabled" : "disabled";
+              setSoundPreference(preference);
+              localStorage.setItem("sound_preference", preference);
+              if (enable) {
+                // Play a sample sound immediately to celebrate enabling
+                setTimeout(() => {
+                  playRandomInteractiveSound();
+                }, 100);
+              }
+            }}
+            playSampleSound={playRandomInteractiveSound}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Compare Floating Bottom Drawer */}
+      <AnimatePresence>
+        {comparedTools.length > 0 && !showComparisonModal && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[150] w-[92%] max-w-3xl bg-slate-900/95 backdrop-blur-2xl border border-orange-500/30 rounded-3xl p-4 sm:p-5 shadow-[0_15px_40px_rgba(249,115,22,0.15)] flex flex-col xs:flex-row items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-4 flex-wrap justify-center xs:justify-start">
+              <div className="text-left">
+                <p className="text-[9px] font-black uppercase tracking-widest text-orange-400">Comparison Stack</p>
+                <p className="text-xs text-white font-bold">{comparedTools.length} of 3 tools selected</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {comparedTools.map(tool => (
+                  <div key={`stack-${tool.id}`} className="relative group/stack">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 p-1.5 flex items-center justify-center shadow-lg">
+                      <img
+                        src={`https://www.google.com/s2/favicons?sz=64&domain=${new URL(tool.url).hostname}`}
+                        alt={tool.name}
+                        className="w-6 h-6 object-contain"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=80&h=80&q=80";
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => toggleCompareTool(tool)}
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-[8px] font-bold shadow-md cursor-pointer transition-transform hover:scale-110"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                {comparedTools.length < 3 && (
+                  <div className="w-10 h-10 rounded-xl border border-dashed border-slate-700 flex items-center justify-center text-slate-600 font-bold text-xs" title="Select more tools to compare">
+                    +
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setComparedTools([])}
+                className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-400 transition-colors cursor-pointer bg-transparent border-none outline-none"
+              >
+                Clear All
+              </button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowComparisonModal(true)}
+                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-orange-500/20 flex items-center gap-2 cursor-pointer"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                Compare Now
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Side-by-side Comparative matrix Modal */}
+      <AnimatePresence>
+        {showComparisonModal && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 sm:p-6 md:p-10">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowComparisonModal(false)}
+              className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 30 }}
+              transition={{ type: "spring", stiffness: 260, damping: 26 }}
+              className="relative w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="px-6 sm:px-8 py-5 border-b border-white/5 flex items-center justify-between bg-slate-950/40">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
+                    <ArrowLeftRight className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Side-by-Side Model Comparison</h3>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">In-depth statistical cross-examination</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowComparisonModal(false)}
+                  className="w-10 h-10 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center border border-slate-700/50 cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Matrix Scroll Area */}
+              <div className="p-6 sm:p-8 overflow-y-auto custom-scrollbar flex-1">
+                <div className="min-w-[600px]">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="w-1/4 pb-6 font-black text-[10px] text-slate-500 uppercase tracking-widest border-b border-white/5">Attributes</th>
+                        {comparedTools.map(tool => (
+                          <th key={`header-${tool.id}`} className="w-[25%] pb-6 border-b border-white/5 px-4">
+                            <div className="flex flex-col gap-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 p-1.5 flex items-center justify-center">
+                                  <img
+                                    src={`https://www.google.com/s2/favicons?sz=64&domain=${new URL(tool.url).hostname}`}
+                                    alt={tool.name}
+                                    className="w-6 h-6 object-contain"
+                                    onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=80&h=80&q=80"; }}
+                                  />
+                                </div>
+                                <h4 className="text-md font-black text-white leading-tight uppercase tracking-tight">{tool.name}</h4>
+                              </div>
+                            </div>
+                          </th>
+                        ))}
+                        {/* Placeholder columns if < 3 tools are selected */}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <th key={`empty-header-${i}`} className="pb-6 border-b border-white/5 opacity-20 px-4">
+                            <span className="text-[10px] font-bold tracking-widest text-slate-600 uppercase">Empty Slot</span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {/* Category */}
+                      <tr>
+                        <td className="py-4.5 font-bold text-xs text-slate-400 uppercase tracking-widest">Category</td>
+                        {comparedTools.map(tool => (
+                          <td key={`cat-${tool.id}`} className="py-4.5 px-4">
+                            <span className="text-xs font-extrabold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20">
+                              {tool.category}
+                            </span>
+                          </td>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <td key={`empty-cat-${i}`} className="py-4.5 px-4 text-slate-700 text-xs">-</td>
+                        ))}
+                      </tr>
+
+                      {/* Type / Platform */}
+                      <tr>
+                        <td className="py-4.5 font-bold text-xs text-slate-400 uppercase tracking-widest">Deployment</td>
+                        {comparedTools.map(tool => (
+                          <td key={`type-${tool.id}`} className="py-4.5 px-4">
+                            <span className="text-xs font-bold text-slate-300 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                              {tool.type}
+                            </span>
+                          </td>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <td key={`empty-type-${i}`} className="py-4.5 px-4 text-slate-700 text-xs">-</td>
+                        ))}
+                      </tr>
+
+                      {/* Upvotes */}
+                      <tr>
+                        <td className="py-4.5 font-bold text-xs text-slate-400 uppercase tracking-widest">Popularity</td>
+                        {comparedTools.map(tool => (
+                          <td key={`upvotes-${tool.id}`} className="py-4.5 px-4">
+                            <div className="flex items-center gap-1.5 text-xs font-black text-amber-500">
+                              <ThumbsUp className="w-3.5 h-3.5 fill-current" />
+                              <span>{tool.upvotes} UPVOTES</span>
+                            </div>
+                          </td>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <td key={`empty-upvotes-${i}`} className="py-4.5 px-4 text-slate-700 text-xs">-</td>
+                        ))}
+                      </tr>
+
+                      {/* Traffic / Visits */}
+                      <tr>
+                        <td className="py-4.5 font-bold text-xs text-slate-400 uppercase tracking-widest">Core Views</td>
+                        {comparedTools.map(tool => (
+                          <td key={`visits-${tool.id}`} className="py-4.5 px-4">
+                            <div className="text-xs font-mono font-medium text-slate-300">
+                              {tool.visitCount || 0} VISITS
+                            </div>
+                          </td>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <td key={`empty-visits-${i}`} className="py-4.5 px-4 text-slate-700 text-xs">-</td>
+                        ))}
+                      </tr>
+
+                      {/* Rating */}
+                      <tr>
+                        <td className="py-4.5 font-bold text-xs text-slate-400 uppercase tracking-widest">Rating</td>
+                        {comparedTools.map(tool => (
+                          <td key={`rating-${tool.id}`} className="py-4.5 px-4">
+                            <div className="flex items-center gap-1">
+                              <Star className="w-3.5 h-3.5 text-yellow-500 fill-current" />
+                              <span className="text-xs font-extrabold text-white">{tool.averageRating ? tool.averageRating.toFixed(1) : "N/A"}</span>
+                              <span className="text-[10px] text-slate-500">({tool.totalRatingsCount || 0})</span>
+                            </div>
+                          </td>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <td key={`empty-rating-${i}`} className="py-4.5 px-4 text-slate-700 text-xs">-</td>
+                        ))}
+                      </tr>
+
+                      {/* APK availability */}
+                      <tr>
+                        <td className="py-4.5 font-bold text-xs text-slate-400 uppercase tracking-widest">Direct APK</td>
+                        {comparedTools.map(tool => (
+                          <td key={`apk-${tool.id}`} className="py-4.5 px-4">
+                            {tool.apk ? (
+                              <span className="text-[10px] font-black uppercase text-green-400 bg-green-500/10 border border-green-500/30 px-2 py-0.5 rounded-md">Yes</span>
+                            ) : (
+                              <span className="text-[10px] font-black uppercase text-slate-500 bg-slate-800/40 border border-white/5 px-2 py-0.5 rounded-md">No</span>
+                            )}
+                          </td>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <td key={`empty-apk-${i}`} className="py-4.5 px-4 text-slate-700 text-xs">-</td>
+                        ))}
+                      </tr>
+
+                      {/* Description */}
+                      <tr>
+                        <td className="py-4.5 font-bold text-xs text-slate-400 uppercase tracking-widest">Overview</td>
+                        {comparedTools.map(tool => (
+                          <td key={`desc-${tool.id}`} className="py-4.5 px-4">
+                            <p className="text-xs text-slate-300 leading-relaxed line-clamp-3 max-w-[220px]">
+                              {tool.desc}
+                            </p>
+                          </td>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <td key={`empty-desc-${i}`} className="py-4.5 px-4 text-slate-700 text-xs">-</td>
+                        ))}
+                      </tr>
+
+                      {/* Action columns */}
+                      <tr>
+                        <td className="py-6 font-bold text-xs text-slate-400 uppercase tracking-widest">Action Matrix</td>
+                        {comparedTools.map(tool => (
+                          <td key={`action-${tool.id}`} className="py-6 px-4">
+                            <div className="flex flex-col gap-2">
+                              <a
+                                href={tool.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all"
+                              >
+                                <span>Launch</span>
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={() => {
+                                  setSelectedTool(tool);
+                                  setShowComparisonModal(false);
+                                }}
+                                className="w-full py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg font-bold text-[10px] uppercase tracking-widest border border-slate-750 flex items-center justify-center gap-1 transition-all"
+                              >
+                                View Details
+                              </button>
+                              <button
+                                onClick={() => toggleCompareTool(tool)}
+                                className="text-[10px] font-bold text-red-400 hover:text-red-500 transition-colors uppercase tracking-widest text-center mt-1 cursor-pointer bg-transparent border-none outline-none"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </td>
+                        ))}
+                        {Array.from({ length: Math.max(0, 3 - comparedTools.length) }).map((_, i) => (
+                          <td key={`empty-action-${i}`} className="py-6 px-4 text-slate-700 text-xs">-</td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-8 py-5 border-t border-white/5 bg-slate-950/40 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowComparisonModal(false)}
+                  className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs uppercase tracking-widest border border-slate-700 transition-all cursor-pointer"
+                >
+                  Close Matrix
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {toast && (
           <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
@@ -2008,6 +2762,38 @@ export default function App() {
           >
             {toast.type === 'success' ? <Zap className="w-5 h-5 fill-current" /> : <AlertTriangle className="w-5 h-5" />}
             <span className="font-black text-xs uppercase tracking-widest">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Background Spinning Galaxy */}
+      <AnimatePresence>
+        {showSpinningGalaxy && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.1, rotate: 0 }}
+            animate={{ opacity: 0.75, scale: 1.5, rotate: 360 }}
+            exit={{ opacity: 0, scale: 2.2, rotate: 720 }}
+            transition={{ duration: 3, ease: "easeInOut" }}
+            className="pointer-events-none fixed inset-0 z-[5] flex items-center justify-center overflow-hidden bg-slate-950/20"
+          >
+            {/* Elegant spinning galaxy spiral disk */}
+            <div className="relative w-[700px] h-[700px] rounded-full filter blur-[1px]">
+              {/* Brilliant Star Core */}
+              <div className="absolute inset-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-gradient-to-r from-yellow-200 via-amber-300 to-orange-500 blur-2xl animate-pulse" />
+              
+              {/* Spiral Arm 1 */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-purple-600 via-pink-500 to-transparent rounded-full opacity-50 mix-blend-screen scale-100 transform rotate-12" />
+              {/* Spiral Arm 2 */}
+              <div className="absolute inset-0 bg-gradient-to-bl from-blue-600 via-indigo-500 to-transparent rounded-full opacity-50 mix-blend-screen scale-90 transform -rotate-45" />
+              {/* Spiral Arm 3 */}
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-rose-500 to-transparent rounded-full opacity-40 mix-blend-screen scale-110 transform rotate-90" />
+              
+              {/* Star particles */}
+              <div className="absolute top-1/4 left-1/4 w-2 h-2 rounded-full bg-white shadow-[0_0_12px_#fff] animate-ping" />
+              <div className="absolute bottom-1/4 right-1/4 w-3 h-3 rounded-full bg-blue-400 shadow-[0_0_15px_#60a5fa] animate-ping [animation-delay:0.4s]" />
+              <div className="absolute top-1/3 right-1/3 w-2 h-2 rounded-full bg-purple-300 shadow-[0_0_10px_#c084fc] animate-ping [animation-delay:0.8s]" />
+              <div className="absolute bottom-1/3 left-1/3 w-2.5 h-2.5 rounded-full bg-pink-400 shadow-[0_0_12px_#f472b6] animate-ping [animation-delay:1.2s]" />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

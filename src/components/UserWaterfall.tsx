@@ -68,13 +68,13 @@ export default function UserWaterfall({ onProfileClick, isMobileView = false }: 
       const newFalling = {
         id: Math.random().toString(),
         user: randomUser,
-        x: 10 + Math.random() * 70, // Keep away from borders slightly for perfect view
-        duration: (7 + Math.random() * 8) / speed,
-        delay: Math.random() * 0.5,
-        rotationSpeed: (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 25)
+        x: 10 + Math.random() * 80, // Keep away from borders slightly for perfect view
+        duration: (8 + Math.random() * 8) / speed,
+        delay: Math.random() * 0.3,
+        rotationSpeed: (Math.random() > 0.5 ? 1 : -1) * (12 + Math.random() * 18)
       };
 
-      setFallingUsers(prev => [...prev.slice(-25), newFalling]);
+      setFallingUsers(prev => [...prev.slice(-15), newFalling]); // Cap at 15 to prevent DOM bloat and boost rendering performance
     }, spawnInterval);
 
     return () => clearInterval(interval);
@@ -187,7 +187,7 @@ export default function UserWaterfall({ onProfileClick, isMobileView = false }: 
               }}
               onClick={() => onProfileClick(item.user.uid)}
               className="absolute z-10 p-1 group cursor-pointer focus:outline-none"
-              style={{ width: "52px", height: "52px" }}
+              style={{ width: "52px", height: "52px", willChange: "transform, opacity", transform: "translateZ(0)" }}
             >
               <div className="relative w-full h-full">
                 {/* Flow glow ripple behind the user photo */}

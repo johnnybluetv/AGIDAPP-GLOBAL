@@ -243,7 +243,9 @@ export default function DriveDashboard({ tools }: DriveDashboardProps) {
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl w-full">
+    <div className="bg-slate-950/90 border border-sky-500/30 rounded-3xl p-6 shadow-2xl w-full shadow-sky-500/5 relative overflow-hidden">
+      {/* Decorative colored glow bar at the top */}
+      <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-sky-400 via-blue-500 to-sky-400" />
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-800/60">
         <div className="flex items-center gap-3">

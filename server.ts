@@ -431,15 +431,40 @@ async function startServer() {
   app.post("/api/ai/generate-image", async (req, res) => {
     try {
       const { prompt } = req.body;
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image",
-        contents: { parts: [{ text: prompt }] },
-        config: {
-          imageConfig: {
-            aspectRatio: "16:9"
+      let response;
+      const maxRetries = 3;
+      let lastError;
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          console.log(`[Gemini SDK] Generating image (Attempt ${attempt + 1}/${maxRetries})`);
+          response = await ai.models.generateContent({
+            model: "gemini-2.5-flash-image",
+            contents: { parts: [{ text: prompt }] },
+            config: {
+              imageConfig: {
+                aspectRatio: "16:9"
+              }
+            }
+          });
+          break; // success
+        } catch (error: any) {
+          lastError = error;
+          const isRetryable = error?.message?.includes("503") || error?.status === 503 || error?.message?.includes("high demand") || error?.message?.includes("UNAVAILABLE");
+
+          if (isRetryable && attempt < maxRetries - 1) {
+            const backoffDelay = 1500 * Math.pow(1.5, attempt);
+            console.warn(`[Gemini SDK] Image generation returned unavailable. Retrying in ${backoffDelay}ms... error: ${error.message || error}`);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            continue;
           }
+          throw error;
         }
-      });
+      }
+
+      if (!response) {
+        throw lastError || new Error("Failed to get image generation response");
+      }
 
       let base64 = "";
       for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -461,16 +486,41 @@ async function startServer() {
   app.post("/api/ai/generate-video", async (req, res) => {
     try {
       const { prompt } = req.body;
-      // Note: This requires a paid key.
-      const operation = await ai.models.generateVideos({
-        model: "veo-3.1-lite-generate-preview",
-        prompt: prompt,
-        config: {
-          numberOfVideos: 1,
-          resolution: "720p",
-          aspectRatio: "16:9"
+      let operation;
+      const maxRetries = 3;
+      let lastError;
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          console.log(`[Gemini SDK] Generating video (Attempt ${attempt + 1}/${maxRetries})`);
+          operation = await ai.models.generateVideos({
+            model: "veo-3.1-lite-generate-preview",
+            prompt: prompt,
+            config: {
+              numberOfVideos: 1,
+              resolution: "720p",
+              aspectRatio: "16:9"
+            }
+          });
+          break; // success
+        } catch (error: any) {
+          lastError = error;
+          const isRetryable = error?.message?.includes("503") || error?.status === 503 || error?.message?.includes("high demand") || error?.message?.includes("UNAVAILABLE");
+
+          if (isRetryable && attempt < maxRetries - 1) {
+            const backoffDelay = 1500 * Math.pow(1.5, attempt);
+            console.warn(`[Gemini SDK] Video generation returned unavailable. Retrying in ${backoffDelay}ms... error: ${error.message || error}`);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            continue;
+          }
+          throw error;
         }
-      });
+      }
+
+      if (!operation) {
+        throw lastError || new Error("Failed to start video generation");
+      }
+
       res.json({ operationName: operation.name });
     } catch (error: any) {
       res.status(500).json({ error: error.message || String(error) });

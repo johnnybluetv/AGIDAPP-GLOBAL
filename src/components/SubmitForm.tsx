@@ -1,9 +1,10 @@
 import * as React from "react";
 import { CATEGORIES, PLATFORM_TYPES, Category, PlatformType } from "../types";
-import { Plus, Send, CheckCircle2, AlertCircle, Tag, X as XIcon, ChevronDown, ChevronUp, Info, HelpCircle } from "lucide-react";
+import { Plus, Send, CheckCircle2, AlertCircle, Tag, X as XIcon, ChevronDown, ChevronUp, Info, HelpCircle, Image as ImageIcon, Video, FileText, UploadCloud, Trash2, Paperclip, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, addDoc, serverTimestamp, doc, setDoc } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "../firebase";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { db, storage, handleFirestoreError, OperationType } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 
 export default function SubmitForm() {
@@ -23,6 +24,77 @@ export default function SubmitForm() {
   const [status, setStatus] = React.useState<"idle" | "submitting" | "success" | "error">("idle");
   const [lastSubmittedId, setLastSubmittedId] = React.useState<string | null>(null);
   const descLength = formData.desc.length;
+
+  // Media files uploading states
+  const [uploadedFiles, setUploadedFiles] = React.useState<{ url: string; type: 'image' | 'video' | 'document'; name: string }[]>([]);
+  const [mediaErrors, setMediaErrors] = React.useState<string | null>(null);
+  const [uploadingFilesCount, setUploadingFilesCount] = React.useState(0);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    setMediaErrors(null);
+    setUploadingFilesCount(prev => prev + files.length);
+
+    for (const file of files) {
+      // Determine file category
+      let type: 'image' | 'video' | 'document' = 'document';
+      if (file.type.startsWith('image/')) {
+        type = 'image';
+      } else if (file.type.startsWith('video/')) {
+        type = 'video';
+      }
+
+      // Check max size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
+        setMediaErrors(`File "${file.name}" is too large. Max allowed size is 10MB.`);
+        setUploadingFilesCount(prev => Math.max(0, prev - 1));
+        continue;
+      }
+
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const storageRef = ref(storage, `ai_products_media/${fileName}`);
+        const uploadTask = uploadBytesResumable(storageRef, file);
+
+        await new Promise<void>((resolve, reject) => {
+          uploadTask.on('state_changed',
+            null,
+            (error) => {
+              console.error("Upload error:", error);
+              reject(error);
+            },
+            async () => {
+              try {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                setUploadedFiles(prev => [...prev, {
+                  url: downloadURL,
+                  type,
+                  name: file.name
+                }]);
+                resolve();
+              } catch (err) {
+                reject(err);
+              }
+            }
+          );
+        });
+      } catch (err) {
+        console.error("Failed to upload:", err);
+        setMediaErrors(`Failed to upload "${file.name}". Please try again.`);
+      } finally {
+        setUploadingFilesCount(prev => Math.max(0, prev - 1));
+      }
+    }
+  };
+
+  const removeUploadedFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleAddTag = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && tagInput.trim()) {
@@ -80,6 +152,7 @@ export default function SubmitForm() {
       const docRef = await addDoc(collection(db, "ai_tools"), {
         ...formData,
         tags,
+        mediaFiles: uploadedFiles,
         authorId: user?.uid || "anonymous",
         upvotes: 0,
         createdAt: serverTimestamp()
@@ -107,6 +180,7 @@ export default function SubmitForm() {
         desc: ""
       });
       setTags([]);
+      setUploadedFiles([]);
       setErrors({}); // Clear any residual errors
       setStatus("success");
     } catch (error) {
@@ -367,6 +441,111 @@ export default function SubmitForm() {
                   className="bg-transparent border-none focus:outline-none text-white text-sm flex-1 min-w-[120px] py-1 placeholder:text-slate-700"
                 />
               </div>
+            </div>
+
+            {/* Product & Service Media Files Section */}
+            <div className="space-y-3 md:col-span-2 p-5 bg-slate-950/40 border border-slate-800/80 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-300">Product & Service Media</h4>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Attach high-fidelity screenshots, videos, or documents</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3.5 py-1.5 bg-blue-600/15 border border-blue-500/20 hover:bg-blue-600/20 text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Paperclip className="w-3 h-3" />
+                  Select Files
+                </button>
+              </div>
+
+              {/* Hidden file input */}
+              <input 
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,video/*,application/pdf,.doc,.docx"
+                onChange={handleMediaUpload}
+                className="hidden"
+              />
+
+              {/* Drag and Drop Zone */}
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-800/80 hover:border-blue-500/40 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors bg-slate-950/30 group"
+              >
+                <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 group-hover:scale-110 group-hover:text-sky-400 transition-all duration-300">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider text-center">
+                  Drag & Drop media here, or <span className="text-blue-400 group-hover:underline">browse files</span>
+                </p>
+                <p className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">
+                  Images, Videos, and PDFs supported (Max 10MB per file)
+                </p>
+              </div>
+
+              {/* Media upload error */}
+              {mediaErrors && (
+                <div className="text-[10px] font-bold text-red-400 flex items-center gap-1.5 bg-red-500/5 p-2 rounded-lg border border-red-500/10">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{mediaErrors}</span>
+                </div>
+              )}
+
+              {/* List of uploaded files / uploading states */}
+              {(uploadedFiles.length > 0 || uploadingFilesCount > 0) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                  {uploadedFiles.map((file, idx) => (
+                    <div 
+                      key={`uploaded-${idx}`}
+                      className="bg-slate-900 border border-slate-800/80 p-3 rounded-xl flex items-center justify-between gap-3 relative group overflow-hidden"
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-850 flex items-center justify-center text-slate-400 shrink-0 overflow-hidden">
+                          {file.type === 'image' ? (
+                            <img src={file.url} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                          ) : file.type === 'video' ? (
+                            <Video className="w-5 h-5 text-purple-400" />
+                          ) : (
+                            <FileText className="w-5 h-5 text-emerald-400" />
+                          )}
+                        </div>
+                        <div className="overflow-hidden">
+                          <p className="text-xs font-black text-white truncate max-w-[160px] uppercase tracking-tight">{file.name}</p>
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{file.type}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeUploadedFile(idx)}
+                        className="p-1.5 rounded-lg bg-slate-950 hover:bg-red-500/10 border border-slate-800 hover:border-red-500/20 text-slate-500 hover:text-red-400 transition-all cursor-pointer"
+                        title="Remove attachment"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Uploading loading cards placeholders */}
+                  {Array.from({ length: uploadingFilesCount }).map((_, i) => (
+                    <div 
+                      key={`uploading-${i}`}
+                      className="bg-slate-900/50 border border-dashed border-slate-800 p-3 rounded-xl flex items-center gap-3 shrink-0"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-850 flex items-center justify-center text-slate-600">
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest">UPLOADING_FILE...</p>
+                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Processing to core storage</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 md:col-span-2">
