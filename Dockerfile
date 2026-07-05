@@ -21,7 +21,6 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
 
 # Copy package configuration
 COPY package.json package-lock.json* ./
@@ -29,11 +28,9 @@ COPY package.json package-lock.json* ./
 # Install only production dependencies
 RUN npm ci --omit=dev
 
-# Copy built application from builder stage
+# Copy built application and required configurations from builder stage
 COPY --from=builder /app/dist ./dist
-
-# Expose port 3000
-EXPOSE 3000
+COPY --from=builder /app/firebase-applet-config.json ./firebase-applet-config.json
 
 # Start the application
 CMD ["npm", "start"]
