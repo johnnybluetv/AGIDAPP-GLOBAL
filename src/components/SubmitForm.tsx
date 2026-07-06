@@ -196,7 +196,7 @@ export default function SubmitForm() {
       <div className="max-w-4xl mx-auto px-6">
         <div className="mb-12 text-center">
           <h2 className="text-3xl font-bold text-white mb-4">Contribute to the Directory</h2>
-          <p className="text-slate-400 mb-8">Knowledge shared is intelligence multiplied. Add a new AI tool to AGID.</p>
+          <p className="text-slate-400 mb-8">Knowledge shared is intelligence multiplied. Add a new AI tool to Agidapp Global.</p>
 
           <div className="max-w-2xl mx-auto mb-10 overflow-hidden">
             <button 

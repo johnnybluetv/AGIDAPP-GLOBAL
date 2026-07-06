@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </radialGradient>
+
+    <!-- Glowing effect filters -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="glow-bright" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="15" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Line Gradients -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#6d28d9" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="100%" height="100%" fill="url(#bgGrad)" />
+
+  <!-- Outer Hexagon Grid Background (Subtle) -->
+  <polygon points="256,40 443,148 443,364 256,472 69,364 69,148" fill="none" stroke="#1e293b" stroke-width="2" opacity="0.4" />
+
+  <!-- Outer Hexagon Shape (Glow) -->
+  <polygon points="256,56 429,156 429,356 256,456 83,356 83,156" fill="none" stroke="url(#blueGrad)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" />
+
+  <!-- Inner Cube Construction Lines -->
+  <!-- Top Left Point to Top Right Point -->
+  <line x1="169.5" y1="206" x2="342.5" y2="206" stroke="#1e293b" stroke-width="4" stroke-dasharray="8 6" opacity="0.6" />
+
+  <!-- Structural Connections to Center (256, 256) -->
+  <!-- Top Left Vertex (83, 156) is NOT connected directly but Top Left inner line is (169.5, 206) -->
+  
+  <!-- Cyan Glowing Segment pointing Up-Left -->
+  <line x1="256" y1="256" x2="149" y2="194" stroke="url(#cyanGrad)" stroke-width="10" stroke-linecap="round" filter="url(#glow)" />
+
+  <!-- Dark Blue / Indigo line pointing Down-Left to Bottom-Left Vertex (83, 356) -->
+  <line x1="256" y1="256" x2="83" y2="356" stroke="#1d4ed8" stroke-width="8" stroke-linecap="round" filter="url(#glow)" />
+
+  <!-- Bright Blue Vertical Line pointing Down to Bottom Vertex (256, 456) -->
+  <line x1="256" y1="256" x2="256" y2="456" stroke="url(#blueGrad)" stroke-width="12" stroke-linecap="round" filter="url(#glow)" />
+
+  <!-- Right branch bending up -->
+  <path d="M 256 256 L 429 356 L 429 156" fill="none" stroke="#2563eb" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" />
+  
+  <!-- Right-Up line connecting to Center -->
+  <line x1="256" y1="256" x2="429" y2="156" stroke="#3b82f6" stroke-width="8" stroke-linecap="round" filter="url(#glow)" opacity="0.8" />
+
+  <!-- Glowing core in the center -->
+  <!-- Subtle back glow -->
+  <circle cx="256" cy="256" r="32" fill="#22d3ee" opacity="0.3" filter="url(#glow-bright)" />
+  <!-- Outer dot -->
+  <circle cx="256" cy="256" r="16" fill="#38bdf8" filter="url(#glow)" />
+  <!-- Inner bright white core -->
+  <circle cx="256" cy="256" r="10" fill="#ffffff" />
+</svg>

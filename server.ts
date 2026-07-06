@@ -80,7 +80,7 @@ async function startServer() {
       }
 
       const tool = toolSnap.data();
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = "https://www.agidappglobal.com";
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${new URL(tool.url).hostname}&sz=128`;
 
       // Serve a simple HTML page with OG tags for social preview
@@ -93,23 +93,24 @@ async function startServer() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <!-- Primary Meta Tags -->
-  <title>${tool.name} | AGID AI Directory</title>
-  <meta name="title" content="${tool.name} | AGID AI Directory">
+  <title>${tool.name} | Agidapp Global</title>
+  <meta name="title" content="${tool.name} | Agidapp Global">
   <meta name="description" content="${tool.desc}">
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Agidapp Global">
   <meta property="og:url" content="${baseUrl}/share/${toolId}">
-  <meta property="og:title" content="${tool.name} - Discover on AGID">
+  <meta property="og:title" content="${tool.name} - Discover on Agidapp Global">
   <meta property="og:description" content="${tool.desc}">
-  <meta property="og:image" content="${faviconUrl}">
+  <meta property="og:image" content="${baseUrl}/logo.png">
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image">
   <meta property="twitter:url" content="${baseUrl}/share/${toolId}">
-  <meta property="twitter:title" content="${tool.name} - Discover on AGID">
+  <meta property="twitter:title" content="${tool.name} - Discover on Agidapp Global">
   <meta property="twitter:description" content="${tool.desc}">
-  <meta property="twitter:image" content="${faviconUrl}">
+  <meta property="twitter:image" content="${baseUrl}/logo.png">
 
   <style>
     body { 
@@ -159,7 +160,7 @@ async function startServer() {
     <img src="${faviconUrl}" alt="">
     <h1>${tool.name}</h1>
     <p>${tool.desc}</p>
-    <a href="/?toolId=${toolId}">Opening in AGID...</a>
+    <a href="/?toolId=${toolId}">Opening in Agidapp Global...</a>
   </div>
 </body>
 </html>`;
@@ -182,7 +183,7 @@ async function startServer() {
       }
 
       const tool = toolSnap.data();
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = "https://www.agidappglobal.com";
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${new URL(tool.url).hostname}&sz=128`;
 
       const html = `
@@ -191,14 +192,24 @@ async function startServer() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${tool.name} | AGID AI Directory</title>
+  <title>${tool.name} | Agidapp Global</title>
+  <meta name="title" content="${tool.name} | Agidapp Global">
   <meta name="description" content="${tool.desc}">
   
-  <!-- Open Graph -->
+  <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="${tool.name} - Discover on AGID">
+  <meta property="og:site_name" content="Agidapp Global">
+  <meta property="og:url" content="${baseUrl}/tool/${toolId}">
+  <meta property="og:title" content="${tool.name} - Discover on Agidapp Global">
   <meta property="og:description" content="${tool.desc}">
-  <meta property="og:image" content="${faviconUrl}">
+  <meta property="og:image" content="${baseUrl}/logo.png">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="${baseUrl}/tool/${toolId}">
+  <meta property="twitter:title" content="${tool.name} - Discover on Agidapp Global">
+  <meta property="twitter:description" content="${tool.desc}">
+  <meta property="twitter:image" content="${baseUrl}/logo.png">
 
   <style>
     body { background: #020617; color: white; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
@@ -217,7 +228,7 @@ async function startServer() {
     <img src="${faviconUrl}" alt="">
     <h1>${tool.name}</h1>
     <p>${tool.desc}</p>
-    <a href="/?toolId=${toolId}">Explore on AGID</a>
+    <a href="/?toolId=${toolId}">Explore on Agidapp Global</a>
   </div>
 </body>
 </html>`;
@@ -240,7 +251,7 @@ async function startServer() {
       }
 
       const art = artSnap.data();
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = "https://www.agidappglobal.com";
       const snippet = art.content.substring(0, 160).replace(/[#*`]/g, '');
 
       const html = `
@@ -249,15 +260,25 @@ async function startServer() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${art.title} | AGID Knowledge</title>
+  <title>${art.title} | Agidapp Global Knowledge</title>
+  <meta name="title" content="${art.title} | Agidapp Global Knowledge">
   <meta name="description" content="${snippet}">
   <meta name="author" content="${art.authorName}">
 
-  <!-- Open Graph -->
+  <!-- Open Graph / Facebook -->
   <meta property="og:type" content="article">
-  <meta property="og:title" content="${art.title}">
+  <meta property="og:site_name" content="Agidapp Global">
+  <meta property="og:url" content="${baseUrl}/blog/${articleId}">
+  <meta property="og:title" content="${art.title} - Agidapp Global">
   <meta property="og:description" content="${snippet}">
-  <meta property="og:image" content="${art.mediaUrl || (baseUrl + '/og-image.png')}">
+  <meta property="og:image" content="${art.mediaUrl || (baseUrl + '/logo.png')}">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="${baseUrl}/blog/${articleId}">
+  <meta property="twitter:title" content="${art.title} - Agidapp Global">
+  <meta property="twitter:description" content="${snippet}">
+  <meta property="twitter:image" content="${art.mediaUrl || (baseUrl + '/logo.png')}">
   
   <!-- Structured Data -->
   <script type="application/ld+json">
@@ -287,7 +308,7 @@ async function startServer() {
 </head>
 <body>
   <div class="card">
-    <div style="color: #3b82f6; font-weight: 900; margin-bottom: 1.5rem; font-size: 0.75rem; letter-spacing: 0.4em;">AGID KNOWLEDGE BASE</div>
+    <div style="color: #3b82f6; font-weight: 900; margin-bottom: 1.5rem; font-size: 0.75rem; letter-spacing: 0.4em;">AGIDAPP GLOBAL KNOWLEDGE BASE</div>
     <h1>${art.title}</h1>
     <p>${snippet}...</p>
     <a href="/?articleId=${articleId}">Read Full Article</a>

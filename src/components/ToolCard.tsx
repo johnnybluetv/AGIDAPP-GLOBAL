@@ -80,7 +80,7 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
     }
   }, [tool.url]);
 
-  const shareText = `Check out ${tool.name} on AGID: ${tool.desc} #AGID #AI #Directory #AITools @AGID_Official`;
+  const shareText = `Check out ${tool.name} on Agidapp Global: ${tool.desc} #AgidappGlobal #AI #Directory #AITools @AgidappGlobal`;
   const shareUrl = tool.url;
 
   const trackClick = async (type: 'visit' | 'social_click' | 'internal_view', platform?: string) => {
@@ -250,7 +250,7 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
             </Tooltip>
           )}
           {tool.visitCount && tool.visitCount > 0 && (
-            <Tooltip text={`${tool.visitCount} visits from AGID explorer`}>
+            <Tooltip text={`${tool.visitCount} visits from Agidapp Global explorer`}>
               <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-emerald-500/20 flex items-center gap-1.5 shadow-sm">
                 <Globe className="w-3 h-3" />
                 {tool.visitCount >= 1000 ? `${(tool.visitCount / 1000).toFixed(1)}k` : tool.visitCount}
@@ -759,7 +759,7 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
               <div>
                 <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                   <QrCode className="w-4 h-4 text-blue-400" />
-                  AGID QR Scanner
+                  Agidapp Global QR Scanner
                 </h4>
                 <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Scan with your phone to open</p>
               </div>

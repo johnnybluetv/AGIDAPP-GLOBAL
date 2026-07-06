@@ -11,7 +11,7 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    title: "Welcome to AGID",
+    title: "Welcome to Agidapp Global",
     desc: "The definitive directory for Artificial General Intelligence tools. Let's show you around.",
     icon: <Sparkles className="w-8 h-8 text-blue-400" />,
   },
@@ -28,7 +28,7 @@ const STEPS: Step[] = [
     selector: "[aria-label='Article menu']",
   },
   {
-    title: "Contribute to AGID",
+    title: "Contribute to Agidapp Global",
     desc: "Found a great tool? Submit it to help us build the most comprehensive AI index on the planet.",
     icon: <Plus className="w-8 h-8 text-blue-400" />,
     selector: "#submit-section",

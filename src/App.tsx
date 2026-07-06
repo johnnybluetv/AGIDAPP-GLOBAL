@@ -452,18 +452,18 @@ export default function App() {
 
   // Dynamic Meta Tags
   React.useEffect(() => {
-    const defaultTitle = "AGID - Artificial General Intelligence Directory";
-    const defaultDesc = "Explore AGID, the most comprehensive AI tool directory. Discover LLMs, developer tools, creative AI, and more.";
+    const defaultTitle = "Agidapp Global";
+    const defaultDesc = "Agidapp Global - The most comprehensive AI tool directory. Discover LLMs, developer tools, creative AI, and more.";
 
     if (selectedTool) {
-      document.title = `${selectedTool.name} - AI Registry | AGID`;
+      document.title = `${selectedTool.name} - AI Registry | Agidapp Global`;
       let metaDesc = document.querySelector('meta[name="description"]');
       if (!metaDesc) {
         metaDesc = document.createElement('meta');
         metaDesc.setAttribute('name', 'description');
         document.head.appendChild(metaDesc);
       }
-      metaDesc.setAttribute("content", `Explore ${selectedTool.name}: ${selectedTool.desc}. Join the AGID directory to discover the latest in AI.`);
+      metaDesc.setAttribute("content", `Explore ${selectedTool.name}: ${selectedTool.desc}. Join the Agidapp Global directory to discover the latest in AI.`);
     } else {
       document.title = defaultTitle;
       let metaDesc = document.querySelector('meta[name="description"]');
@@ -512,9 +512,9 @@ export default function App() {
   };
 
   const handleShareTool = async (tool: AiTool) => {
-    const shareUrl = `${window.location.origin}/share/${tool.id}`;
+    const shareUrl = `https://www.agidappglobal.com/share/${tool.id}`;
     const shareData = {
-      title: `${tool.name} | AGID`,
+      title: `${tool.name} | Agidapp Global`,
       text: tool.desc,
       url: shareUrl,
     };
@@ -818,18 +818,26 @@ export default function App() {
          style={screenMode !== 'Fluid' ? { backgroundColor: '#020617' } : {}}
     >
       <Helmet>
-        <title>AGID | Artificial General Intelligence Directory</title>
-        <meta name="description" content="Discover the world's most comprehensive directory of AI tools, mobile APKs, and LLM platforms. Join the largest community of AI enthusiasts." />
-        <link rel="canonical" href={window.location.origin} />
-        {selectedTool && (
-          <>
-            <title>{selectedTool.name} - AI Tool Preview | AGID</title>
-            <meta name="description" content={selectedTool.desc} />
-            <meta property="og:title" content={`${selectedTool.name} - Discover on AGID`} />
-            <meta property="og:description" content={selectedTool.desc} />
-            <link rel="canonical" href={`${window.location.origin}/share/${selectedTool.id}`} />
-          </>
-        )}
+        {/* Primary Meta Tags */}
+        <title>{selectedTool ? `${selectedTool.name} - AI Tool Preview | Agidapp Global` : "Agidapp Global"}</title>
+        <meta name="title" content={selectedTool ? `${selectedTool.name} - AI Tool Preview | Agidapp Global` : "Agidapp Global"} />
+        <meta name="description" content={selectedTool ? selectedTool.desc : "Discover Agidapp Global, the most comprehensive directory of AI tools, mobile APKs, and LLM platforms. Join the largest community of AI enthusiasts."} />
+        <link rel="canonical" href={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com"} />
+
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Agidapp Global" />
+        <meta property="og:url" content={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com"} />
+        <meta property="og:title" content={selectedTool ? `${selectedTool.name} - Discover on Agidapp Global` : "Agidapp Global"} />
+        <meta property="og:description" content={selectedTool ? selectedTool.desc : "Discover Agidapp Global, the most comprehensive directory of AI tools, mobile APKs, and LLM platforms. Join the largest community of AI enthusiasts."} />
+        <meta property="og:image" content="https://www.agidappglobal.com/logo.png" />
+
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:url" content={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com"} />
+        <meta name="twitter:title" content={selectedTool ? `${selectedTool.name} - Discover on Agidapp Global` : "Agidapp Global"} />
+        <meta name="twitter:description" content={selectedTool ? selectedTool.desc : "Discover Agidapp Global, the most comprehensive directory of AI tools, mobile APKs, and LLM platforms. Join the largest community of AI enthusiasts."} />
+        <meta name="twitter:image" content="https://www.agidappglobal.com/logo.png" />
       </Helmet>
       {/* Waterfall Desktop Lane */}
       <div className="fixed left-0 top-0 bottom-0 w-24 hidden lg:block z-[40]">
@@ -926,7 +934,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="px-3 py-1 bg-blue-600 rounded-lg text-white font-black tracking-tighter text-2xl shadow-lg shadow-blue-600/20">
-                AGID
+                Agidapp Global
               </div>
               <div className="relative">
                 <button 
@@ -1257,7 +1265,7 @@ export default function App() {
                 Discover the <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Infinite</span> <br/> AI Landscape.
               </h2>
               <p className="max-w-2xl mx-auto text-lg text-slate-400 mb-12">
-                AGID is the world's most comprehensive catalog for artificial intelligence. From LLMs to edge-computing APKs, explore tools that shape the future.
+                Agidapp Global is the world's most comprehensive catalog for artificial intelligence. From LLMs to edge-computing APKs, explore tools that shape the future.
               </p>
 
               <div className="flex flex-wrap justify-center gap-4 mb-16">
@@ -1930,12 +1938,12 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2 opacity-50">
              <div className="px-2 py-0.5 bg-white text-black font-black tracking-tighter text-sm rounded">
-                AGID
+                Agidapp Global
               </div>
               <span className="text-xs font-mono">v1.2.0-STABLE</span>
           </div>
           <div className="text-slate-600 text-xs text-center md:text-right">
-            &copy; 2026 Artificial General Intelligence Directory. <br/>
+            &copy; 2026 Agidapp Global. <br/>
             Engineered for the Silicon Age.
           </div>
         </div>

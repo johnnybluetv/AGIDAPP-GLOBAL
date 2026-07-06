@@ -1,5 +1,5 @@
 {
-  "name": "AGID - Artificial General Intelligence Directory",
+  "name": "Agidapp Global",
   "description": "A comprehensive, live-updating catalog for AI tools, software, web apps, platforms, and APKs.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -149,14 +149,21 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
                   className="max-w-3xl mx-auto"
                 >
                   <Helmet>
-                    <title>{selectedArticle.title} | AGID Knowledge</title>
+                    <title>{selectedArticle.title} | Agidapp Global Knowledge</title>
                     <meta name="description" content={selectedArticle.content.substring(0, 160)} />
                     <meta name="author" content={selectedArticle.authorName} />
-                    <meta property="og:title" content={selectedArticle.title} />
+                    <meta property="og:title" content={`${selectedArticle.title} | Agidapp Global Knowledge`} />
                     <meta property="og:description" content={selectedArticle.content.substring(0, 160)} />
                     <meta property="og:type" content="article" />
+                    <meta property="og:site_name" content="Agidapp Global" />
+                    <meta property="og:url" content={`https://www.agidappglobal.com/blog/${selectedArticle.id}`} />
+                    <meta property="og:image" content={selectedArticle.mediaUrl || "https://www.agidappglobal.com/logo.png"} />
+                    <meta name="twitter:card" content="summary_large_image" />
+                    <meta name="twitter:title" content={`${selectedArticle.title} | Agidapp Global Knowledge`} />
+                    <meta name="twitter:description" content={selectedArticle.content.substring(0, 160)} />
+                    <meta name="twitter:image" content={selectedArticle.mediaUrl || "https://www.agidappglobal.com/logo.png"} />
                     <meta name="robots" content="index, follow" />
-                    <link rel="canonical" href={`${window.location.origin}/blog/${selectedArticle.id}`} />
+                    <link rel="canonical" href={`https://www.agidappglobal.com/blog/${selectedArticle.id}`} />
                     <script type="application/ld+json">
                       {JSON.stringify({
                         "@context": "https://schema.org",
@@ -170,7 +177,7 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
                         "datePublished": selectedArticle.createdAt?.toDate().toISOString(),
                         "mainEntityOfPage": {
                           "@type": "WebPage",
-                          "@id": window.location.href
+                          "@id": `https://www.agidappglobal.com/blog/${selectedArticle.id}`
                         }
                       })}
                     </script>
