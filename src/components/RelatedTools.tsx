@@ -46,7 +46,7 @@ export default function RelatedTools({
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {related.map(tool => (
+        {related.map((tool, idx) => (
           <div key={`related-${tool.id}`} className="scale-[0.98] hover:scale-100 transition-transform origin-center">
             <ToolCard 
               tool={tool}
@@ -64,6 +64,7 @@ export default function RelatedTools({
               onEdit={() => onEdit(tool)}
               onDelete={() => onDelete(tool)}
               onShare={() => onShare(tool)}
+              index={idx}
             />
           </div>
         ))}

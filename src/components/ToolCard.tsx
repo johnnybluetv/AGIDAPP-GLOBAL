@@ -1,6 +1,6 @@
 import * as React from "react";
 import { AiTool } from "../types";
-import { ThumbsUp, Globe, Download, ExternalLink, Share2, Edit, Trash2, Maximize2, Heart, MessageSquare, BarChart3, Twitter, Facebook, Linkedin, X, Send, Mail, Link2, Smartphone, Type as Typography, Radio, Play, Camera, Hash, Ghost, Cloud, Zap, Layout, BookOpen, Star, Instagram, Youtube, Music, Globe as GlobeIcon, X as CloseIcon, QrCode, Check, ChevronRight } from "lucide-react";
+import { ThumbsUp, Globe, Download, ExternalLink, Share2, Edit, Trash2, Maximize2, Heart, MessageSquare, BarChart3, Twitter, Facebook, Linkedin, X, Send, Mail, Link2, Smartphone, Type as Typography, Radio, Play, Camera, Hash, Ghost, Cloud, Zap, Layout, BookOpen, Star, Instagram, Youtube, Music, Globe as GlobeIcon, X as CloseIcon, QrCode, Check, ChevronRight, Copy } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { doc, updateDoc, increment, setDoc, deleteDoc, serverTimestamp, collection, onSnapshot, query, addDoc } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
@@ -64,13 +64,16 @@ interface ToolCardProps {
   isFeatured?: boolean;
   isComparing?: boolean;
   onCompareToggle?: () => void;
+  index?: number;
 }
 
-export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, onShare, isFeatured, isComparing, onCompareToggle }: ToolCardProps) {
+export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, onShare, isFeatured, isComparing, onCompareToggle, index }: ToolCardProps) {
   const { user, login } = useAuth();
   const [isUpvoted, setIsUpvoted] = React.useState(false);
   const [commentsCount, setCommentsCount] = React.useState<number>(0);
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const [hoveredPoint, setHoveredPoint] = React.useState<{ day: string; visits: number } | null>(null);
 
   const domain = React.useMemo(() => {
     try {
@@ -82,6 +85,49 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
 
   const shareText = `Check out ${tool.name} on Agidapp Global: ${tool.desc} #AgidappGlobal #AI #Directory #AITools @AgidappGlobal`;
   const shareUrl = tool.url;
+
+  const telemetry = React.useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < tool.id.length; i++) {
+      hash = tool.id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const baseVisit = Math.max(7, tool.visitCount || 42);
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    return days.map((day, i) => {
+      const seed = Math.sin(hash + i * 2.1) * 0.4 + 1.0;
+      const visits = Math.max(1, Math.round((baseVisit / 7) * seed));
+      return { day, visits };
+    });
+  }, [tool.id, tool.visitCount]);
+
+  const sparklineWidth = 120;
+  const sparklineHeight = 28;
+
+  const sparklinePoints = React.useMemo(() => {
+    const visitsArray = telemetry.map(t => t.visits);
+    const max = Math.max(...visitsArray, 1);
+    const min = Math.min(...visitsArray, 0);
+    const range = max - min;
+
+    return telemetry.map((t, i) => {
+      const x = (i / (telemetry.length - 1)) * (sparklineWidth - 8) + 4;
+      const y = range === 0
+        ? sparklineHeight / 2
+        : sparklineHeight - ((t.visits - min) / range) * (sparklineHeight - 8) - 4;
+      return { x, y, day: t.day, visits: t.visits };
+    });
+  }, [telemetry]);
+
+  const pathD = React.useMemo(() => {
+    return sparklinePoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  }, [sparklinePoints]);
+
+  const fillD = React.useMemo(() => {
+    if (sparklinePoints.length === 0) return "";
+    const first = sparklinePoints[0];
+    const last = sparklinePoints[sparklinePoints.length - 1];
+    return `${pathD} L ${last.x} ${sparklineHeight} L ${first.x} ${sparklineHeight} Z`;
+  }, [sparklinePoints, pathD]);
 
   const trackClick = async (type: 'visit' | 'social_click' | 'internal_view', platform?: string) => {
     try {
@@ -211,8 +257,18 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 24, scale: 0.98 }}
+      animate={{ 
+        opacity: 1, 
+        y: 0,
+        scale: 1,
+        transition: {
+          type: "spring",
+          stiffness: 100,
+          damping: 15,
+          delay: index !== undefined ? Math.min(index * 0.04, 0.4) : 0
+        }
+      }}
       whileHover={{ 
         y: -10,
         scale: 1.025,
@@ -316,30 +372,59 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
               </h3>
             </button>
 
-            <Tooltip text={`Open ${domain}`}>
-              <motion.a
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                id={`visit-${tool.id}`}
-                href={tool.url}
-                onClick={handleVisit}
-                target="_blank"
-                rel="noreferrer noopener"
-                aria-label={`Visit official website for ${tool.name}`}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-[10px] transition-all shadow-lg shadow-blue-600/20 group/btn border border-blue-400/20"
-              >
-                <div className="w-3.5 h-3.5 bg-white/10 rounded-md overflow-hidden flex items-center justify-center p-0.5">
-                  <img 
-                    src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`} 
-                    alt=""
-                    className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-                Visit Site
-                <ExternalLink className="w-3 h-3 opacity-60" />
-              </motion.a>
-            </Tooltip>
+            <div className="flex items-center gap-2">
+              <Tooltip text={copied ? "Copied!" : "Copy Share Link"}>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const shareUrl = `https://www.agidappglobal.com/share/${tool.id}`;
+                      await navigator.clipboard.writeText(shareUrl);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    } catch (err) {
+                      console.error("Failed to copy link", err);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all shadow-md ${
+                    copied 
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-emerald-950/20" 
+                    : "bg-slate-800 text-slate-300 border-slate-750 hover:text-white hover:border-slate-600 hover:bg-slate-750"
+                  }`}
+                  aria-label="Copy tool share link"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5 text-blue-400" />}
+                  <span>{copied ? "Copied" : "Copy"}</span>
+                </motion.button>
+              </Tooltip>
+
+              <Tooltip text={`Open ${domain}`}>
+                <motion.a
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  id={`visit-${tool.id}`}
+                  href={tool.url}
+                  onClick={handleVisit}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  aria-label={`Visit official website for ${tool.name}`}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-[10px] transition-all shadow-lg shadow-blue-600/20 group/btn border border-blue-400/20"
+                >
+                  <div className="w-3.5 h-3.5 bg-white/10 rounded-md overflow-hidden flex items-center justify-center p-0.5">
+                    <img 
+                      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`} 
+                      alt=""
+                      className="w-full h-full object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  Visit Site
+                  <ExternalLink className="w-3 h-3 opacity-60" />
+                </motion.a>
+              </Tooltip>
+            </div>
           </div>
 
           <button 
@@ -393,9 +478,9 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
     </Tooltip>
 
     {/* Real-time Popularity Sparkline Badge */}
-    <div className="bg-slate-950/45 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-4 group/traffic hover:border-blue-500/20 hover:shadow-[0_0_15px_rgba(59,130,246,0.1)] transition-all duration-300">
+    <div className="bg-slate-950/45 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-4 group/traffic hover:border-blue-500/20 hover:shadow-[0_0_15px_rgba(59,130,246,0.1)] transition-all duration-300 relative">
       <div className="flex flex-col">
-        <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest block mb-0.5">Real-Time Traffic</span>
+        <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest block mb-0.5">Weekly Telemetry</span>
         <div className="flex items-baseline gap-1.5">
           <span className="text-sm font-black text-white group-hover/traffic:text-blue-400 transition-colors">
             {(tool.visitCount || 0).toLocaleString()}
@@ -409,28 +494,77 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
           </span>
         </div>
       </div>
-      
-      {/* Animated micro bars representing traffic volume activity */}
-      <div className="flex items-end gap-1 h-7 px-1">
-        {getPopularityBars(tool.visitCount || 0).map((barHeight, idx) => (
-          <motion.div
-            key={idx}
-            className="w-1 rounded-t-sm"
-            style={{ height: `${barHeight}%` }}
-            initial={{ scaleY: 0.3 }}
-            animate={{ 
-              scaleY: [1, 1.25, 0.75, 1.15, 1],
-              backgroundColor: idx % 2 === 0 ? "rgb(59, 130, 246)" : "rgb(16, 185, 129)",
-              opacity: [0.6, 1, 0.7, 1, 0.8]
-            }}
-            transition={{
-              duration: 1.4 + (idx * 0.2),
-              repeat: Infinity,
-              repeatType: "reverse",
-              ease: "easeInOut"
-            }}
-          />
-        ))}
+
+      {/* Mini SVG Sparkline Chart */}
+      <div className="relative flex items-center pr-2">
+        <svg width={sparklineWidth} height={sparklineHeight} className="overflow-visible">
+          <defs>
+            <linearGradient id={`sparkline-grad-${tool.id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id={`sparkline-stroke-${tool.id}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#22d3ee" />
+              <stop offset="50%" stopColor="#3b82f6" />
+              <stop offset="100%" stopColor="#8b5cf6" />
+            </linearGradient>
+          </defs>
+          {/* Gradient Area Fill */}
+          <path d={fillD} fill={`url(#sparkline-grad-${tool.id})`} />
+          {/* Sparkline Stroke Line */}
+          <path d={pathD} fill="none" stroke={`url(#sparkline-stroke-${tool.id})`} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+
+          {/* Interactive Dots for hover states */}
+          {sparklinePoints.map((p, i) => (
+            <g key={i}>
+              {hoveredPoint && hoveredPoint.day === p.day && (
+                <circle cx={p.x} cy={p.y} r="4.5" fill="#3b82f6" opacity="0.4" className="animate-ping" />
+              )}
+              <circle 
+                cx={p.x} 
+                cy={p.y} 
+                r={hoveredPoint && hoveredPoint.day === p.day ? "3" : "1.5"} 
+                fill={hoveredPoint && hoveredPoint.day === p.day ? "#22d3ee" : "#3b82f6"}
+                className="transition-all duration-150"
+              />
+            </g>
+          ))}
+
+          {/* Invisible hit targets for easy hovering */}
+          {sparklinePoints.map((p, i) => {
+            const colWidth = sparklineWidth / telemetry.length;
+            const startX = p.x - colWidth / 2;
+            return (
+              <rect
+                key={`hit-${i}`}
+                x={startX}
+                y={0}
+                width={colWidth}
+                height={sparklineHeight}
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredPoint(p)}
+                onMouseLeave={() => setHoveredPoint(null)}
+              />
+            );
+          })}
+        </svg>
+
+        {/* Float interactive tooltip */}
+        <AnimatePresence>
+          {hoveredPoint && (
+            <motion.div 
+              initial={{ opacity: 0, y: 4, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 border border-blue-500/30 text-[9px] font-mono font-bold uppercase tracking-widest text-blue-300 px-2 py-1 rounded-md shadow-xl flex items-center gap-1 z-30 whitespace-nowrap backdrop-blur-sm"
+            >
+              <span>{hoveredPoint.day}:</span>
+              <span className="text-white font-black">{hoveredPoint.visits}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
 

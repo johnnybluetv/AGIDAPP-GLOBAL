@@ -2,7 +2,7 @@ import * as React from "react";
 import { onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { AiTool, CATEGORIES, Category, UserRole } from "./types";
-import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronRight, BookOpen, Star, Users, BarChart, Cloud, Sun, Moon, ArrowLeftRight, Image as ImageIcon, FileText } from "lucide-react";
+import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronRight, BookOpen, Star, Users, BarChart, Cloud, Sun, Moon, ArrowLeftRight, Image as ImageIcon, FileText, Settings, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useSpring } from "motion/react";
 import ToolCard from "./components/ToolCard";
 import { Sparkles, Palette, Code2, Box, Video as VideoIcon } from "lucide-react";
@@ -59,6 +59,7 @@ export default function App() {
   const [authMode, setAuthMode] = React.useState<'signin' | 'signup' | null>(null);
   const [screenMode, setScreenMode] = React.useState<'Fluid' | 'Mobile' | 'Laptop2' | 'Desktop' | 'Macbook' | 'TV' | 'Projector' | 'Theatre'>('Fluid');
   const [showScreenModeMenu, setShowScreenModeMenu] = React.useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = React.useState(false);
   const [showWaterfallMobile, setShowWaterfallMobile] = React.useState(false);
   const [showInsights, setShowInsights] = React.useState(false);
   const [showDrive, setShowDrive] = React.useState(false);
@@ -1127,6 +1128,102 @@ export default function App() {
               <Zap className={`w-4 h-4 ${isScraping ? 'animate-pulse text-blue-400' : 'text-blue-500'}`} />
               {isScraping ? 'INDEXING_CORE_MODELS...' : 'Index Popular AIs'}
             </button>
+            {/* Persistent Settings Panel */}
+            <div className="relative">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                className={`p-2.5 rounded-xl border transition-all flex items-center justify-center relative shadow-lg group cursor-pointer ${
+                  showSettingsMenu 
+                    ? 'border-blue-500 bg-blue-500/10 text-blue-400' 
+                    : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                }`}
+                title="Application Settings"
+              >
+                <Settings className="w-5 h-5 transition-transform duration-300 group-hover:rotate-45" />
+              </motion.button>
+
+              <AnimatePresence>
+                {showSettingsMenu && (
+                  <>
+                    {/* Backdrop to close settings when clicking outside */}
+                    <div 
+                      className="fixed inset-0 z-40 cursor-default" 
+                      onClick={() => setShowSettingsMenu(false)} 
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl z-50 min-w-[280px] backdrop-blur-xl"
+                    >
+                      <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-800">
+                        <Settings className="w-4 h-4 text-blue-400 animate-spin-slow" />
+                        <h3 className="text-xs font-black uppercase tracking-widest text-white">App Settings</h3>
+                      </div>
+
+                      <div className="space-y-4">
+                        {/* Interactive Sound Experience Setting */}
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                              {soundPreference === "enabled" ? (
+                                <Volume2 className="w-4 h-4 text-blue-400 animate-bounce" />
+                              ) : (
+                                <VolumeX className="w-4 h-4 text-slate-500" />
+                              )}
+                              Sound FX
+                            </span>
+                            <button
+                              onClick={() => {
+                                const newPref = soundPreference === "enabled" ? "disabled" : "enabled";
+                                setSoundPreference(newPref);
+                                localStorage.setItem("sound_preference", newPref);
+                                if (newPref === "enabled") {
+                                  playRandomInteractiveSound();
+                                }
+                              }}
+                              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
+                                soundPreference === "enabled" ? "bg-blue-600" : "bg-slate-800"
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                  soundPreference === "enabled" ? "translate-x-5" : "translate-x-1"
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide leading-relaxed">
+                            Play soundscapes on every interface click & interactive action.
+                          </p>
+                        </div>
+
+                        {/* Test Soundscape Button */}
+                        <button
+                          onClick={() => playRandomInteractiveSound()}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                          Test Synthesized FX
+                        </button>
+
+                        {/* Informational System Config */}
+                        <div className="pt-2 border-t border-slate-800 text-[8px] font-mono text-slate-500 flex justify-between items-center">
+                          <span>AUDIO_ENGINE:</span>
+                          <span className={soundPreference === "enabled" ? "text-emerald-400" : "text-rose-500"}>
+                            {soundPreference === "enabled" ? "ONLINE" : "MUTED"}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
             {/* Enhanced Theme Toggle */}
             <motion.button
               whileHover={{ scale: 1.05 }}
@@ -1759,6 +1856,7 @@ export default function App() {
                     onEdit={() => handleEditTool(tool)}
                     onDelete={() => setToolToDelete(tool)}
                     onShare={() => handleShareTool(tool)}
+                    index={idx}
                   />
                 </div>
               ))}
@@ -1840,8 +1938,8 @@ export default function App() {
             <div className="space-y-12">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <AnimatePresence mode="popLayout">
-                  {filteredTools.slice(0, displayCount).map((tool: AiTool) => (
-                      <ToolCard 
+                  {filteredTools.slice(0, displayCount).map((tool: AiTool, idx: number) => (
+                    <ToolCard 
                       key={tool.id} 
                       tool={tool} 
                       isFavorited={favorites.includes(tool.id)}
@@ -1851,6 +1949,7 @@ export default function App() {
                       onEdit={() => handleEditTool(tool)}
                       onDelete={() => setToolToDelete(tool)}
                       onShare={() => handleShareTool(tool)}
+                      index={idx}
                     />
                   ))}
                 </AnimatePresence>

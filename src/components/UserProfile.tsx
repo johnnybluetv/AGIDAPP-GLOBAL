@@ -733,7 +733,7 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                         exit={{ opacity: 0, x: -20 }}
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 outline-none"
                       >
-                        {submissions.length > 0 ? submissions.map(tool => (
+                        {submissions.length > 0 ? submissions.map((tool, idx) => (
                           <ToolCard 
                             key={tool.id} 
                             tool={tool} 
@@ -742,6 +742,7 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                             onEdit={() => onEditTool(tool)}
                             onDelete={() => onDeleteTool(tool)}
                             onShare={() => onShareTool(tool)}
+                            index={idx}
                           />
                         )) : (
                           <div className="col-span-2 py-20 bg-slate-950/30 border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-center">
@@ -838,7 +839,7 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                         exit={{ opacity: 0, x: -20 }}
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 outline-none"
                       >
-                        {favorites.length > 0 ? favorites.map(tool => (
+                        {favorites.length > 0 ? favorites.map((tool, idx) => (
                           <ToolCard 
                             key={tool.id} 
                             tool={tool} 
@@ -847,6 +848,7 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                             onEdit={() => onEditTool(tool)}
                             onDelete={() => onDeleteTool(tool)}
                             onShare={() => onShareTool(tool)}
+                            index={idx}
                           />
                         )) : (
                           <div className="col-span-2 py-20 bg-slate-950/30 border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-center">
