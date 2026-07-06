@@ -16,8 +16,9 @@ async function testConnection() {
   try {
     await getDocFromServer(doc(db, "test", "connection"));
   } catch (error) {
+    console.info("Connectivity status check:", error);
     if (error instanceof Error && error.message.includes("offline")) {
-      console.error("Firebase is offline. Check configuration.");
+      console.warn("Firebase is offline. Check configuration.");
     }
   }
 }
