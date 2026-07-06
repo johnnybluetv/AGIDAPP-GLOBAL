@@ -22,6 +22,7 @@ import StatsDashboard from "./components/StatsDashboard";
 import VoiceSearch from "./components/VoiceSearch";
 import DriveDashboard from "./components/DriveDashboard";
 import BlazingFire from "./components/BlazingFire";
+import AuthModal from "./components/AuthModal";
 import { deleteDoc, doc, updateDoc, setDoc, increment, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { useAuth } from "./context/AuthContext";
 import { Helmet } from "react-helmet-async";
@@ -750,28 +751,23 @@ export default function App() {
     }
   };
 
-  const handleAuthAction = async (mode: 'signin' | 'signup') => {
+  const handleAuthSuccess = async (authUser: any, isNew: boolean) => {
     try {
-      const isNew = mode === 'signup';
-      const result = await login();
-      
-      if (result && isNew) {
-        // Send notification to admin
+      if (isNew && authUser) {
         await addDoc(collection(db, "notifications"), {
           type: "new_signup",
-          message: `New user signed up: ${result.user.email}`,
-          userId: result.user.uid,
-          userEmail: result.user.email,
+          message: `New user signed up: ${authUser.email || authUser.phoneNumber || authUser.uid}`,
+          userId: authUser.uid,
+          userEmail: authUser.email || "",
           timestamp: serverTimestamp(),
           read: false
         });
         setToast({ message: "Welcome! Signup successful.", type: 'success' });
-      } else if (result) {
+      } else if (authUser) {
         setToast({ message: "Welcome back!", type: 'success' });
       }
-      setAuthMode(null);
     } catch (e) {
-      console.error("Auth failed", e);
+      console.error("Notification creation failed:", e);
     }
   };
 
@@ -1292,54 +1288,12 @@ export default function App() {
       </header>
 
       {/* Auth Selection Modals */}
-      <AnimatePresence>
-        {authMode && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setAuthMode(null)}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center overflow-hidden"
-            >
-              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-600" />
-              
-              <div className="mb-6 inline-flex p-4 bg-blue-600/10 rounded-2xl text-blue-500">
-                {authMode === 'signup' ? <Plus className="w-8 h-8" /> : <LogIn className="w-8 h-8" />}
-              </div>
-
-              <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2">
-                {authMode === 'signup' ? 'Signup for first timers' : 'Welcome back / Sign in'}
-              </h3>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">
-                {authMode === 'signup' 
-                  ? 'Create your professional account to unlock all features' 
-                  : 'Return users sign in below to access your favorites and profile'}
-              </p>
-
-              <button 
-                onClick={() => handleAuthAction(authMode)}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3"
-              >
-                <div className="w-5 h-5 bg-white/10 rounded flex items-center justify-center">
-                   <img src="https://www.google.com/s2/favicons?domain=google.com&sz=64" alt="" className="w-3 h-3" />
-                </div>
-                Continue with Google
-              </button>
-
-              <p className="mt-6 text-[10px] text-slate-500 font-medium uppercase tracking-widest">
-                By continuing, you agree to our <span className="text-slate-400">Terms of Service</span>
-              </p>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <AuthModal
+        isOpen={authMode !== null}
+        onClose={() => setAuthMode(null)}
+        initialMode={authMode || 'signin'}
+        onSuccess={handleAuthSuccess}
+      />
 
       {/* Hero Section */}
       <main>
