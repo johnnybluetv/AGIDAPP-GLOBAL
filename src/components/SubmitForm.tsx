@@ -155,7 +155,8 @@ export default function SubmitForm() {
         mediaFiles: uploadedFiles,
         authorId: user?.uid || "anonymous",
         upvotes: 0,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
 
       setLastSubmittedId(docRef.id);

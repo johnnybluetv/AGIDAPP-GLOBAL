@@ -62,6 +62,18 @@ service cloud.firestore {
              data.updatedAt is timestamp;
     }
 
+    function isValidCuratedProject(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             (data.get('desc', '') == '' || (data.desc is string && data.desc.size() <= 500)) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidBookmark(data) {
+      return data.toolId is string && data.toolId.size() <= 128 &&
+             (data.get('projectId', null) == null || (data.projectId is string && data.projectId.size() <= 128)) &&
+             data.bookmarkedAt is timestamp;
+    }
+
     // Allow test connection for client-side readiness check
     match /test/connection {
       allow read: if true;
@@ -154,6 +166,32 @@ service cloud.firestore {
         allow create: if request.auth != null && request.auth.uid == userId &&
                        incoming().timestamp == request.time;
         allow update, delete: if false; // Activities are immutable logs
+      }
+
+      match /curated_projects/{projectId} {
+        allow read: if true;
+        allow create: if request.auth != null && request.auth.uid == userId &&
+                       isValidId(projectId) &&
+                       isValidCuratedProject(incoming()) &&
+                       incoming().createdAt == request.time;
+        allow update: if request.auth != null && request.auth.uid == userId &&
+                       isValidId(projectId) &&
+                       isValidCuratedProject(incoming()) &&
+                       incoming().createdAt == existing().createdAt;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /bookmarks/{bookmarkId} {
+        allow read: if true;
+        allow create: if request.auth != null && request.auth.uid == userId &&
+                       isValidId(bookmarkId) &&
+                       isValidBookmark(incoming()) &&
+                       incoming().bookmarkedAt == request.time;
+        allow update: if request.auth != null && request.auth.uid == userId &&
+                       isValidId(bookmarkId) &&
+                       isValidBookmark(incoming()) &&
+                       incoming().bookmarkedAt == existing().bookmarkedAt;
+        allow delete: if request.auth != null && request.auth.uid == userId;
       }
     }
   }

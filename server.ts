@@ -68,6 +68,15 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Permanent 301 Redirect non-www to www for consolidated SEO indexing and Google Search Console alignment
+  app.use((req, res, next) => {
+    const host = req.headers.host;
+    if (host === "agidappglobal.com") {
+      return res.redirect(301, `https://www.agidappglobal.com${req.originalUrl}`);
+    }
+    next();
+  });
+
   // Dynamic Sitemap Generator for Google Search indexing
   app.get("/sitemap.xml", async (req, res) => {
     try {

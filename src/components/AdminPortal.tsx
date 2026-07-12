@@ -1,5 +1,5 @@
 import * as React from "react";
-import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, updateDoc, limit, orderBy } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, updateDoc, limit, orderBy, addDoc } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { AdminRole, UserRole, ClickLog } from "../types";
@@ -11,7 +11,7 @@ interface AdminPortalProps {
   onClose: () => void;
 }
 
-type AdminTab = 'staff' | 'analytics' | 'notifications';
+type AdminTab = 'staff' | 'analytics' | 'notifications' | 'import';
 
 export default function AdminPortal({ onClose }: AdminPortalProps) {
   const { user } = useAuth();
@@ -24,6 +24,12 @@ export default function AdminPortal({ onClose }: AdminPortalProps) {
   const [newRole, setNewRole] = React.useState<UserRole>("Editor");
   const [isAdding, setIsAdding] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Bulk Import Tool State
+  const [importJson, setImportJson] = React.useState("");
+  const [importStatus, setImportStatus] = React.useState<"idle" | "parsing" | "saving" | "success" | "error">("idle");
+  const [importMessage, setImportMessage] = React.useState("");
+  const [parsedTools, setParsedTools] = React.useState<any[]>([]);
 
   React.useEffect(() => {
     const qAdmins = query(collection(db, "admins"));
@@ -85,6 +91,74 @@ export default function AdminPortal({ onClose }: AdminPortalProps) {
     return { topTools, topCountries, topCities, typesMap, total: clicks.length };
   }, [clicks]);
 
+  const handleParseImport = () => {
+    try {
+      setImportStatus("parsing");
+      setImportMessage("");
+      if (!importJson.trim()) {
+        throw new Error("Please paste JSON content first.");
+      }
+      
+      const parsed = JSON.parse(importJson);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+      
+      const validated = items.map((item: any, idx: number) => {
+        if (!item.name) {
+          throw new Error(`Tool at index ${idx} is missing required 'name' field.`);
+        }
+        if (!item.url) {
+          throw new Error(`Tool "${item.name}" (index ${idx}) is missing required 'url' field.`);
+        }
+        
+        return {
+          name: String(item.name).trim(),
+          category: (item.category || "Other") as any,
+          type: (item.type || "Web App") as any,
+          url: String(item.url).trim(),
+          apk: item.apk ? String(item.apk).trim() : "",
+          desc: String(item.desc || "Compiled general intelligence AI app description.").trim(),
+          upvotes: Number(item.upvotes || 0),
+          averageRating: Number(item.averageRating || 5),
+          totalRatingsCount: Number(item.totalRatingsCount || 1),
+          tags: Array.isArray(item.tags) ? item.tags.map(t => String(t).trim()) : [],
+          createdAt: new Date(),
+        };
+      });
+
+      setParsedTools(validated);
+      setImportStatus("idle");
+      setImportMessage(`Parsed ${validated.length} tools successfully! Ready to import.`);
+    } catch (err: any) {
+      setImportStatus("error");
+      setImportMessage(err?.message || "Invalid JSON array format.");
+      setParsedTools([]);
+    }
+  };
+
+  const handleSaveImportedTools = async () => {
+    if (parsedTools.length === 0) return;
+    setImportStatus("saving");
+    setImportMessage("Saving tools directly to Firestore directory database...");
+    
+    let count = 0;
+    try {
+      for (const tool of parsedTools) {
+        await addDoc(collection(db, "ai_tools"), {
+          ...tool,
+          createdAt: tool.createdAt || serverTimestamp(),
+          updatedAt: tool.updatedAt || serverTimestamp()
+        });
+        count++;
+      }
+      setImportStatus("success");
+      setImportMessage(`Successfully imported ${count} tools directly to Firestore directory!`);
+      setParsedTools([]);
+      setImportJson("");
+    } catch (err: any) {
+      setImportStatus("error");
+      setImportMessage(`Import failed after saving ${count} items: ${err?.message || err}`);
+    }
+  };
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail.trim() || isAdding) return;
@@ -179,6 +253,13 @@ export default function AdminPortal({ onClose }: AdminPortalProps) {
                   {notifications.filter(n => !n.read).length > 0 && (
                     <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                   )}
+                </button>
+                <div className="w-px h-2 bg-slate-800 mx-1" />
+                <button 
+                  onClick={() => setActiveTab('import')}
+                  className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'import' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  <Plus className="w-3 h-3 inline mr-1.5" /> Import Tools
                 </button>
               </div>
             </div>
@@ -440,6 +521,96 @@ export default function AdminPortal({ onClose }: AdminPortalProps) {
                 {notifications.length === 0 && (
                   <div className="py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl">
                     <p className="text-xs font-black text-slate-600 uppercase tracking-widest">No recent alerts</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {activeTab === 'import' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Plus className="w-6 h-6 text-blue-500" />
+                  <div>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Bulk Tool Importer</h3>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Paste a JSON array of tools to populate the directory immediately</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/50 border border-slate-800 p-8 rounded-3xl space-y-6">
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">JSON Content (Array of Tool Objects)</label>
+                  <textarea
+                    rows={10}
+                    value={importJson}
+                    onChange={(e) => setImportJson(e.target.value)}
+                    placeholder={`[\n  {\n    "name": "Gemini Ultra 2.0",\n    "category": "LLM & Chat",\n    "type": "Web App",\n    "url": "https://gemini.google.com",\n    "desc": "Google's most capable AI and AGI model for general multi-modal reasoning tasks.",\n    "tags": ["gemini", "llm", "google", "agent"],\n    "upvotes": 120\n  }\n]`}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-mono text-xs focus:border-blue-500 outline-none transition-all placeholder:text-slate-700"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-4">
+                  <button
+                    onClick={handleParseImport}
+                    disabled={importStatus === "saving" || !importJson.trim()}
+                    className="px-6 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                  >
+                    Validate & Parse JSON
+                  </button>
+
+                  {parsedTools.length > 0 && (
+                    <button
+                      onClick={handleSaveImportedTools}
+                      disabled={importStatus === "saving"}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20"
+                    >
+                      {importStatus === "saving" ? "Importing..." : `Commit ${parsedTools.length} Tools to Directory`}
+                    </button>
+                  )}
+                </div>
+
+                {importMessage && (
+                  <div className={`p-4 rounded-xl text-xs font-semibold ${
+                    importStatus === "success" ? "bg-green-500/10 border border-green-500/20 text-green-400" :
+                    importStatus === "error" ? "bg-red-500/10 border border-red-500/20 text-red-400" :
+                    "bg-blue-500/10 border border-blue-500/20 text-blue-400"
+                  }`}>
+                    {importMessage}
+                  </div>
+                )}
+
+                {parsedTools.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Parsed Preview List ({parsedTools.length})</h4>
+                    <div className="border border-white/5 rounded-2xl overflow-hidden bg-slate-900/40">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-800/50 border-b border-white/5">
+                          <tr>
+                            <th className="px-4 py-3 font-black text-slate-500 uppercase tracking-widest">Name</th>
+                            <th className="px-4 py-3 font-black text-slate-500 uppercase tracking-widest">Category</th>
+                            <th className="px-4 py-3 font-black text-slate-500 uppercase tracking-widest">Type</th>
+                            <th className="px-4 py-3 font-black text-slate-500 uppercase tracking-widest">Tags</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {parsedTools.map((t, idx) => (
+                            <tr key={idx} className="hover:bg-white/5">
+                              <td className="px-4 py-3 font-bold text-white uppercase tracking-tighter">{t.name}</td>
+                              <td className="px-4 py-3 text-slate-400 font-mono text-[10px] uppercase tracking-widest">{t.category}</td>
+                              <td className="px-4 py-3 text-slate-400 font-mono text-[10px] uppercase tracking-widest">{t.type}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {t.tags.map((tag: string) => (
+                                    <span key={tag} className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[9px] text-blue-400 font-semibold font-mono">#{tag}</span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>

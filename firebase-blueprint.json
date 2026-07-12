@@ -143,6 +143,28 @@
         "videoEmbedUrl": { "type": "string", "description": "Optional YouTube/Vimeo embed URL" }
       },
       "required": ["title", "content", "authorId", "authorName", "authorRole", "createdAt", "updatedAt", "status"]
+    },
+    "CuratedProject": {
+      "title": "Curated Project",
+      "description": "A named container for bookmarks representing a curated project/collection",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the curated project" },
+        "desc": { "type": "string", "description": "Optional description" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "Bookmark": {
+      "title": "Bookmark",
+      "description": "A saved tool reference pointing to a curated project/collection",
+      "type": "object",
+      "properties": {
+        "toolId": { "type": "string" },
+        "projectId": { "type": "string", "description": "Nullable project ID" },
+        "bookmarkedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["toolId", "bookmarkedAt"]
     }
   },
   "firestore": {
@@ -181,6 +203,14 @@
     "users/{userId}/activity": {
       "schema": "UserActivity",
       "description": "Log of historical actions for the user"
+    },
+    "users/{userId}/curated_projects": {
+      "schema": "CuratedProject",
+      "description": "Collection of custom projects/folders created by the user"
+    },
+    "users/{userId}/bookmarks": {
+      "schema": "Bookmark",
+      "description": "Collection of bookmarked tools assigned to a user's curated projects"
     }
   }
 }

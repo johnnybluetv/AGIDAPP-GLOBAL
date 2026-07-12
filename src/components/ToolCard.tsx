@@ -1,11 +1,83 @@
 import * as React from "react";
 import { AiTool } from "../types";
-import { ThumbsUp, Globe, Download, ExternalLink, Share2, Edit, Trash2, Maximize2, Heart, MessageSquare, BarChart3, Twitter, Facebook, Linkedin, X, Send, Mail, Link2, Smartphone, Type as Typography, Radio, Play, Camera, Hash, Ghost, Cloud, Zap, Layout, BookOpen, Star, Instagram, Youtube, Music, Globe as GlobeIcon, X as CloseIcon, QrCode, Check, ChevronRight, Copy } from "lucide-react";
+import { ThumbsUp, Globe, Download, ExternalLink, Share2, Edit, Trash2, Maximize2, Heart, MessageSquare, BarChart3, Twitter, Facebook, Linkedin, X, Send, Mail, Link2, Smartphone, Type as Typography, Radio, Play, Camera, Hash, Ghost, Cloud, Zap, Layout, BookOpen, Star, Instagram, Youtube, Music, Globe as GlobeIcon, X as CloseIcon, QrCode, Check, ChevronRight, Copy, Sparkles, Code2, Box, Video } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { doc, updateDoc, increment, setDoc, deleteDoc, serverTimestamp, collection, onSnapshot, query, addDoc } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import Tooltip from "./Tooltip";
+
+const getCategoryBadgeDetails = (category: string) => {
+  switch (category) {
+    case "LLM & Chat":
+      return {
+        icon: <MessageSquare className="w-3 h-3 text-blue-400" />,
+        className: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+      };
+    case "Image & Art":
+      return {
+        icon: <Sparkles className="w-3 h-3 text-pink-400" />,
+        className: "bg-pink-500/10 text-pink-400 border-pink-500/20"
+      };
+    case "Developer Tools":
+      return {
+        icon: <Code2 className="w-3 h-3 text-emerald-400" />,
+        className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+      };
+    case "Productivity":
+      return {
+        icon: <Zap className="w-3 h-3 text-amber-400" />,
+        className: "bg-amber-500/10 text-amber-400 border-amber-500/20"
+      };
+    case "Audio & Video":
+      return {
+        icon: <Video className="w-3 h-3 text-indigo-400" />,
+        className: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+      };
+    default:
+      return {
+        icon: <Box className="w-3 h-3 text-slate-400" />,
+        className: "bg-slate-800 text-slate-300 border-slate-750"
+      };
+  }
+};
+
+const formatLastUpdated = (updatedAt: any, createdAt: any): string => {
+  const ts = updatedAt || createdAt;
+  if (!ts) return "Recently updated";
+  
+  let date: Date;
+  if (typeof ts.toDate === "function") {
+    date = ts.toDate();
+  } else if (ts instanceof Date) {
+    date = ts;
+  } else if (ts.seconds) {
+    date = new Date(ts.seconds * 1000);
+  } else {
+    date = new Date(ts);
+  }
+
+  if (isNaN(date.getTime())) {
+    return "Recently updated";
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 60) {
+    return diffMins <= 1 ? "Just now" : `${diffMins}m ago`;
+  } else if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  } else if (diffDays < 7) {
+    return `${diffDays}d ago`;
+  } else {
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  }
+};
 
 const SHARING_PLATFORMS = [
   { name: "Twitter", id: "twitter", category: "Social", color: "text-sky-400", bg: "bg-sky-400/10", url: (t, u) => `https://twitter.com/intent/tweet?text=${encodeURIComponent(t)}&url=${encodeURIComponent(u)}`, icon: <Twitter className="w-4 h-4" /> },
@@ -73,6 +145,8 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
   const [commentsCount, setCommentsCount] = React.useState<number>(0);
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [linkCopied, setLinkCopied] = React.useState(false);
+  const [shareCopied, setShareCopied] = React.useState(false);
   const [hoveredPoint, setHoveredPoint] = React.useState<{ day: string; visits: number } | null>(null);
 
   const domain = React.useMemo(() => {
@@ -257,22 +331,38 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24, scale: 0.98 }}
+      initial={{ opacity: 0, y: 24, scale: 0.98, rotate: 0 }}
       animate={{ 
         opacity: 1, 
-        y: 0,
+        y: [0, -5, 5, 0],
+        rotate: [0, -0.6, 0.6, 0],
         scale: 1,
         transition: {
-          type: "spring",
-          stiffness: 100,
-          damping: 15,
-          delay: index !== undefined ? Math.min(index * 0.04, 0.4) : 0
+          y: {
+            repeat: Infinity,
+            duration: 6 + (index ? (index % 3) * 1.5 : 0),
+            ease: "easeInOut"
+          },
+          rotate: {
+            repeat: Infinity,
+            duration: 8 + (index ? (index % 4) * 1.2 : 0),
+            ease: "easeInOut"
+          },
+          opacity: { duration: 0.4, delay: index !== undefined ? Math.min(index * 0.04, 0.4) : 0 },
+          scale: { duration: 0.4, delay: index !== undefined ? Math.min(index * 0.04, 0.4) : 0 }
         }
       }}
       whileHover={{ 
-        y: -10,
-        scale: 1.025,
-        transition: { duration: 0.35, ease: "easeOut" }
+        y: -12,
+        scale: 1.035,
+        rotate: [0, -1.5, 1.5, -1.5, 1.5, 0],
+        x: [0, -1, 1, -1, 1, 0],
+        transition: {
+          rotate: { repeat: Infinity, duration: 1.0, ease: "easeInOut" },
+          x: { repeat: Infinity, duration: 0.6, ease: "easeInOut" },
+          scale: { duration: 0.2 },
+          y: { duration: 0.2 }
+        }
       }}
       id={`tool-${tool.id}`}
       role="article"
@@ -294,9 +384,24 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
               Rank #{Math.max(1, 1000 - tool.upvotes)}
             </span>
           </Tooltip>
-          <span className="px-2.5 py-1 bg-slate-800 text-slate-300 text-[9px] font-black uppercase tracking-widest rounded-lg border border-slate-700 shadow-sm">
-            {tool.category}
-          </span>
+          {(() => {
+            const cat = getCategoryBadgeDetails(tool.category);
+            return (
+              <span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg border flex items-center gap-1.5 shadow-sm ${cat.className}`}>
+                {cat.icon}
+                {tool.category}
+              </span>
+            );
+          })()}
+          <Tooltip text="Last sync check with Firestore directory database">
+            <span className="px-2.5 py-1 bg-slate-900/60 text-slate-400 text-[9px] font-bold tracking-wider rounded-lg border border-white/5 flex items-center gap-1.5 shadow-sm">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-450 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-500"></span>
+              </span>
+              {formatLastUpdated(tool.updatedAt, tool.createdAt)}
+            </span>
+          </Tooltip>
           {tool.averageRating && tool.averageRating > 0 && (
             <Tooltip text={`Average Rating: ${tool.averageRating.toFixed(1)} / 5.0`}>
               <span className="px-2.5 py-1 bg-amber-500/10 text-amber-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-amber-500/20 flex items-center gap-1.5 shadow-sm">
@@ -328,13 +433,24 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
               <QrCode className="w-4 h-4" />
             </button>
           </Tooltip>
-          <Tooltip text="Copy Tool URL">
+          <Tooltip text={linkCopied ? "Copied!" : "Copy Tool URL"}>
             <button 
-              onClick={(e) => { e.stopPropagation(); onShare(); }}
-              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+              onClick={async (e) => { 
+                e.stopPropagation(); 
+                try {
+                  const shareUrl = `https://www.agidappglobal.com/share/${tool.id}`;
+                  await navigator.clipboard.writeText(shareUrl);
+                  setLinkCopied(true);
+                  setTimeout(() => setLinkCopied(false), 2000);
+                } catch (err) {
+                  console.error("Failed to copy link", err);
+                }
+                onShare(); 
+              }}
+              className={`p-1.5 hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 ${linkCopied ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400 hover:text-white'}`}
               aria-label="Copy tool share link"
             >
-              <Link2 className="w-4 h-4" />
+              {linkCopied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
             </button>
           </Tooltip>
           <Tooltip text="Edit Tool Details">
@@ -783,13 +899,24 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
                 </button>
               </Tooltip>
               <div className="w-px h-4 bg-slate-700 mx-0.5 sm:mx-1" />
-              <Tooltip text="More Share Options (50+ Platforms)">
+              <Tooltip text={shareCopied ? "Copied Link!" : "More Share Options (50+ Platforms)"}>
                 <button 
-                  onClick={(e) => { e.stopPropagation(); setIsShareModalOpen(true); }}
-                  className="p-1.5 sm:p-2 text-blue-400 hover:text-white hover:bg-blue-500 rounded-lg transition-all"
+                  onClick={async (e) => { 
+                    e.stopPropagation(); 
+                    try {
+                      const shareUrl = `https://www.agidappglobal.com/share/${tool.id}`;
+                      await navigator.clipboard.writeText(shareUrl);
+                      setShareCopied(true);
+                      setTimeout(() => setShareCopied(false), 2000);
+                    } catch (err) {
+                      console.error("Failed to copy link", err);
+                    }
+                    setIsShareModalOpen(true); 
+                  }}
+                  className={`p-1.5 sm:p-2 rounded-lg transition-all ${shareCopied ? 'text-emerald-400 bg-emerald-500/10' : 'text-blue-400 hover:text-white hover:bg-blue-500'}`}
                   aria-label="Open expanded share menu"
                 >
-                  <Share2 className="w-3.5 h-3.5 sm:w-4 h-4" aria-hidden="true" />
+                  {shareCopied ? <Check className="w-3.5 h-3.5 sm:w-4 h-4" /> : <Share2 className="w-3.5 h-3.5 sm:w-4 h-4" aria-hidden="true" />}
                 </button>
               </Tooltip>
             </div>

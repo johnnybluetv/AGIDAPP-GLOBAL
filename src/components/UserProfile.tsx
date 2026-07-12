@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot, orderBy, limit, doc, getDoc, upda
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { AiTool, UserActivity, UserProfile as UserProfileType } from "../types";
 import { motion, AnimatePresence } from "motion/react";
-import { User, Heart, Send, History, Globe, Briefcase, Plus, Settings, LogOut, CheckCircle2, ChevronRight, Bookmark, ThumbsUp, UserPlus, UserMinus, UserCheck, UserX, Clock, Award, MapPin, Building, Quote, Rss, Loader2, Trash2 } from "lucide-react";
+import { User, Heart, Send, History, Globe, Briefcase, Plus, Settings, LogOut, CheckCircle2, ChevronRight, Bookmark, ThumbsUp, UserPlus, UserMinus, UserCheck, UserX, Clock, Award, MapPin, Building, Quote, Rss, Loader2, Trash2, Folder, FolderPlus, Download } from "lucide-react";
 import ToolCard from "./ToolCard";
 
 interface UserProfileProps {
@@ -26,11 +26,20 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
   const [profile, setProfile] = React.useState<UserProfileType | null>(null);
   const [submissions, setSubmissions] = React.useState<AiTool[]>([]);
   const [favorites, setFavorites] = React.useState<AiTool[]>([]);
+  const [curatedProjects, setCuratedProjects] = React.useState<any[]>([]);
+  const [bookmarks, setBookmarks] = React.useState<any[]>([]);
+  const [bookmarkTools, setBookmarkTools] = React.useState<AiTool[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = React.useState<string>("all");
+  const [isCreatingProject, setIsCreatingProject] = React.useState(false);
+  const [newProjectName, setNewProjectName] = React.useState("");
+  const [newProjectDesc, setNewProjectDesc] = React.useState("");
+  const [isProjectLoading, setIsProjectLoading] = React.useState(false);
   const [activities, setActivities] = React.useState<UserActivity[]>([]);
-  const [activeTab, setActiveTab] = React.useState<"submissions" | "favorites" | "activity" | "social_feed">("submissions");
+  const [activeTab, setActiveTab] = React.useState<"submissions" | "favorites" | "bookmarks" | "activity" | "social_feed">("submissions");
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
   const [isFollowing, setIsFollowing] = React.useState(false);
   const [isFollowLoading, setIsFollowLoading] = React.useState(false);
+  const [dragOverFolderId, setDragOverFolderId] = React.useState<string | null>(null);
   
   // LinkedIn-style Connections State
   const [connectionStatus, setConnectionStatus] = React.useState<'not_connected' | 'pending_sent' | 'pending_received' | 'connected'>('not_connected');
@@ -165,6 +174,118 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
 
     return unsubFavs;
   }, [favoriteIds]);
+
+  // Listen to bookmarks and curated projects for this user profile
+  React.useEffect(() => {
+    if (!targetUid) return;
+
+    const projectsRef = collection(db, "users", targetUid, "curated_projects");
+    const unsubProjects = onSnapshot(projectsRef, (snapshot) => {
+      setCuratedProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${targetUid}/curated_projects`);
+    });
+
+    const bookmarksRef = collection(db, "users", targetUid, "bookmarks");
+    const unsubBookmarks = onSnapshot(bookmarksRef, (snapshot) => {
+      setBookmarks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${targetUid}/bookmarks`);
+    });
+
+    return () => {
+      unsubProjects();
+      unsubBookmarks();
+    };
+  }, [targetUid]);
+
+  // Load bookmark tools from bookmarks
+  React.useEffect(() => {
+    if (bookmarks.length === 0) {
+      setBookmarkTools([]);
+      return;
+    }
+
+    const toolsRef = collection(db, "ai_tools");
+    const unsubTools = onSnapshot(toolsRef, (snapshot) => {
+      const allTools = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AiTool));
+      const bookmarkedToolIds = bookmarks.map(b => b.toolId);
+      setBookmarkTools(allTools.filter(t => bookmarkedToolIds.includes(t.id)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "ai_tools");
+    });
+
+    return unsubTools;
+  }, [bookmarks]);
+
+  const handleExport = (format: "json" | "csv") => {
+    const filteredTools = bookmarkTools.filter(tool => {
+      const bookmarkObj = bookmarks.find(b => b.toolId === tool.id);
+      if (!bookmarkObj) return false;
+      if (selectedProjectId === "all") return true;
+      if (selectedProjectId === "unassigned") return bookmarkObj.projectId === null;
+      return bookmarkObj.projectId === selectedProjectId;
+    });
+
+    if (filteredTools.length === 0) {
+      alert("This collection is empty. Add some bookmarks first!");
+      return;
+    }
+
+    let projectName = "all_bookmarks";
+    if (selectedProjectId === "unassigned") {
+      projectName = "general_bookmarks";
+    } else if (selectedProjectId !== "all") {
+      const proj = curatedProjects.find(p => p.id === selectedProjectId);
+      if (proj) {
+        projectName = proj.name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      }
+    }
+
+    if (format === "json") {
+      const exportData = filteredTools.map(t => ({
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        type: t.type,
+        url: t.url,
+        description: t.desc,
+        upvotes: t.upvotes || 0,
+        averageRating: t.averageRating || 0,
+        tags: t.tags || []
+      }));
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${projectName}_export.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const headers = ["ID", "Name", "Category", "Platform Type", "URL", "Description", "Upvotes", "Average Rating", "Tags"];
+      const rows = filteredTools.map(tool => [
+        `"${tool.id.replace(/"/g, '""')}"`,
+        `"${tool.name.replace(/"/g, '""')}"`,
+        `"${tool.category.replace(/"/g, '""')}"`,
+        `"${tool.type.replace(/"/g, '""')}"`,
+        `"${tool.url.replace(/"/g, '""')}"`,
+        tool.desc ? `"${tool.desc.replace(/"/g, '""').replace(/\n/g, ' ')}"` : '""',
+        tool.upvotes || 0,
+        tool.averageRating || 0,
+        tool.tags ? `"${tool.tags.join(", ").replace(/"/g, '""')}"` : '""'
+      ]);
+
+      const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${projectName}_export.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -706,6 +827,19 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                   </button>
                   <button 
                     role="tab"
+                    aria-selected={activeTab === "bookmarks"}
+                    aria-controls="bookmarks-panel"
+                    id="tab-bookmarks"
+                    onClick={() => setActiveTab("bookmarks")}
+                    className={`pb-4 text-xs sm:text-sm font-black uppercase tracking-widest transition-all relative outline-none shrink-0 focus:text-orange-300 ${
+                      activeTab === "bookmarks" ? "text-orange-400" : "text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    Bookmarks
+                    {activeTab === "bookmarks" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-1 bg-orange-400 rounded-full" />}
+                  </button>
+                  <button 
+                    role="tab"
                     aria-selected={activeTab === "activity"}
                     aria-controls="activity-panel"
                     id="tab-activity"
@@ -859,6 +993,378 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                             </p>
                           </div>
                         )}
+                      </motion.div>
+                    )}
+
+                    {activeTab === "bookmarks" && (
+                      <motion.div 
+                        id="bookmarks-panel"
+                        role="tabpanel"
+                        tabIndex={0}
+                        aria-labelledby="tab-bookmarks"
+                        key="bookmarks"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="space-y-8 outline-none animate-fadeIn"
+                      >
+                        {/* Curated Projects (Collections) Section */}
+                        <div className="space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div>
+                              <h3 className="text-lg font-black text-white">Curated Projects</h3>
+                              <p className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+                                <span>Organize your saved tools into custom themed collections.</span>
+                                {isOwnProfile && (
+                                  <span className="text-orange-450 font-black tracking-wider uppercase text-[9px] bg-orange-500/10 px-2.5 py-0.5 rounded border border-orange-500/20 inline-flex items-center gap-1 animate-pulse">
+                                    💡 Drag & drop tools below to organize!
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                            {isOwnProfile && (
+                              <button
+                                onClick={() => setIsCreatingProject(!isCreatingProject)}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                              >
+                                <FolderPlus className="w-4 h-4 text-orange-400" />
+                                {isCreatingProject ? "Cancel" : "New Project"}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Create Project Form inline */}
+                          <AnimatePresence>
+                            {isCreatingProject && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden bg-slate-950/40 border border-slate-800/80 p-5 rounded-2xl space-y-4"
+                              >
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Project Name *</label>
+                                    <input 
+                                      type="text" 
+                                      required
+                                      placeholder="e.g. Design Kit, Developer Utilities" 
+                                      value={newProjectName}
+                                      onChange={(e) => setNewProjectName(e.target.value)}
+                                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-slate-700 font-bold"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Description (Optional)</label>
+                                    <input 
+                                      type="text" 
+                                      placeholder="e.g. Curated stack for my next freelance work" 
+                                      value={newProjectDesc}
+                                      onChange={(e) => setNewProjectDesc(e.target.value)}
+                                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-slate-700"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex justify-end gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCreatingProject(false);
+                                      setNewProjectName("");
+                                      setNewProjectDesc("");
+                                    }}
+                                    className="px-4 py-2 text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!newProjectName.trim() || isProjectLoading}
+                                    onClick={async () => {
+                                      if (!newProjectName.trim()) return;
+                                      setIsProjectLoading(true);
+                                      try {
+                                        const newProjId = "proj_" + Date.now();
+                                        await setDoc(doc(db, "users", targetUid, "curated_projects", newProjId), {
+                                          name: newProjectName.trim(),
+                                          desc: newProjectDesc.trim(),
+                                          createdAt: new Date()
+                                        });
+                                        setNewProjectName("");
+                                        setNewProjectDesc("");
+                                        setIsCreatingProject(false);
+                                      } catch (err) {
+                                        console.error("Failed to create curated project", err);
+                                      } finally {
+                                        setIsProjectLoading(false);
+                                      }
+                                    }}
+                                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-slate-950 text-xs font-black uppercase tracking-widest rounded-xl transition-colors"
+                                  >
+                                    {isProjectLoading ? "Creating..." : "Create Project"}
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* Projects Folders View */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {/* All Bookmarks Selector */}
+                            <button
+                              onClick={() => setSelectedProjectId("all")}
+                              className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-28 transition-all ${
+                                selectedProjectId === "all"
+                                ? "bg-orange-500/10 border-orange-500/40 shadow-inner ring-1 ring-orange-500/25"
+                                : "bg-slate-950/40 border-slate-800/80 hover:border-slate-700"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <Folder className={`w-6 h-6 ${selectedProjectId === "all" ? "text-orange-400" : "text-slate-600"}`} />
+                                <span className="text-[10px] font-mono font-bold bg-slate-900 px-2 py-0.5 rounded text-slate-400">
+                                  {bookmarks.length}
+                                </span>
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-black text-white uppercase tracking-wider block truncate">All Bookmarks</h4>
+                                <span className="text-[10px] text-slate-500 block truncate">Total saved collection</span>
+                              </div>
+                            </button>
+
+                             {/* Unassigned Bookmarks Selector */}
+                             <button
+                               onClick={() => setSelectedProjectId("unassigned")}
+                               onDragOver={(e) => {
+                                 if (isOwnProfile) {
+                                   e.preventDefault();
+                                   setDragOverFolderId("unassigned");
+                                 }
+                               }}
+                               onDragLeave={() => {
+                                 if (isOwnProfile) setDragOverFolderId(null);
+                               }}
+                               onDrop={async (e) => {
+                                 e.preventDefault();
+                                 setDragOverFolderId(null);
+                                 if (!isOwnProfile || !targetUid) return;
+                                 const toolId = e.dataTransfer.getData("text/plain");
+                                 if (toolId) {
+                                   try {
+                                     const bRef = doc(db, "users", targetUid, "bookmarks", toolId);
+                                     await setDoc(bRef, {
+                                       toolId,
+                                       projectId: null,
+                                       bookmarkedAt: new Date()
+                                     });
+                                   } catch (err) {
+                                     console.error("Failed to move bookmark to unassigned:", err);
+                                   }
+                                 }
+                               }}
+                               className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-28 transition-all duration-200 ${
+                                 dragOverFolderId === "unassigned"
+                                 ? "bg-orange-500/20 border-orange-500 scale-105 shadow-[0_0_20px_rgba(249,115,22,0.3)] ring-2 ring-orange-500/50"
+                                 : selectedProjectId === "unassigned"
+                                 ? "bg-orange-500/10 border-orange-500/40 shadow-inner ring-1 ring-orange-500/25"
+                                 : "bg-slate-950/40 border-slate-800/80 hover:border-slate-700"
+                               }`}
+                             >
+                               <div className="flex items-center justify-between w-full">
+                                 <Folder className={`w-6 h-6 ${dragOverFolderId === "unassigned" || selectedProjectId === "unassigned" ? "text-orange-400" : "text-slate-600"}`} />
+                                 <span className="text-[10px] font-mono font-bold bg-slate-900 px-2 py-0.5 rounded text-slate-400">
+                                   {bookmarks.filter(b => b.projectId === null).length}
+                                 </span>
+                               </div>
+                               <div>
+                                 <h4 className="text-xs font-black text-white uppercase tracking-wider block truncate font-sans">General Bookmarks</h4>
+                                 <span className="text-[10px] text-slate-500 block truncate font-sans">Unassigned tools</span>
+                               </div>
+                             </button>
+ 
+                             {/* Custom Projects */}
+                             {curatedProjects.map((proj) => {
+                               const projBookmarks = bookmarks.filter(b => b.projectId === proj.id);
+                               const isSelected = selectedProjectId === proj.id;
+                               const isDragOver = dragOverFolderId === proj.id;
+                               return (
+                                 <button
+                                   key={proj.id}
+                                   onClick={() => setSelectedProjectId(proj.id)}
+                                   onDragOver={(e) => {
+                                     if (isOwnProfile) {
+                                       e.preventDefault();
+                                       setDragOverFolderId(proj.id);
+                                     }
+                                   }}
+                                   onDragLeave={() => {
+                                     if (isOwnProfile) setDragOverFolderId(null);
+                                   }}
+                                   onDrop={async (e) => {
+                                     e.preventDefault();
+                                     setDragOverFolderId(null);
+                                     if (!isOwnProfile || !targetUid) return;
+                                     const toolId = e.dataTransfer.getData("text/plain");
+                                     if (toolId) {
+                                       try {
+                                         const bRef = doc(db, "users", targetUid, "bookmarks", toolId);
+                                         await setDoc(bRef, {
+                                           toolId,
+                                           projectId: proj.id,
+                                           bookmarkedAt: new Date()
+                                         });
+                                       } catch (err) {
+                                         console.error("Failed to move bookmark to project:", err);
+                                       }
+                                     }
+                                   }}
+                                   className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-28 transition-all duration-200 relative group ${
+                                     isDragOver
+                                     ? "bg-orange-500/20 border-orange-500 scale-105 shadow-[0_0_20px_rgba(249,115,22,0.3)] ring-2 ring-orange-500/50"
+                                     : isSelected
+                                     ? "bg-orange-500/10 border-orange-500/40 shadow-inner ring-1 ring-orange-500/25"
+                                     : "bg-slate-950/40 border-slate-800/80 hover:border-slate-700"
+                                   }`}
+                                 >
+                                   <div className="flex items-center justify-between w-full">
+                                     <Folder className={`w-6 h-6 ${isDragOver || isSelected ? "text-orange-400" : "text-slate-600"}`} />
+                                     <span className="text-[10px] font-mono font-bold bg-slate-900 px-2 py-0.5 rounded text-slate-400">
+                                       {projBookmarks.length}
+                                     </span>
+                                   </div>
+                                   <div className="w-full min-w-0">
+                                     <h4 className="text-xs font-black text-white uppercase tracking-wider block truncate">{proj.name}</h4>
+                                     <span className="text-[10px] text-slate-500 block truncate">{proj.desc || "Curated projects"}</span>
+                                   </div>
+                                 </button>
+                               );
+                             })}
+                          </div>
+                        </div>
+
+                        {/* Selected Project Stats & Management */}
+                        {selectedProjectId !== "all" && selectedProjectId !== "unassigned" && (
+                          <div className="bg-slate-950/30 border border-slate-800/80 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="truncate">
+                              <h4 className="text-sm font-black text-white uppercase tracking-wider">
+                                {curatedProjects.find(p => p.id === selectedProjectId)?.name || "Selected Project"}
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {curatedProjects.find(p => p.id === selectedProjectId)?.desc || "No custom description provided for this collection."}
+                              </p>
+                            </div>
+                            {isOwnProfile && (
+                              <button
+                                onClick={async () => {
+                                  if (!window.confirm("Are you sure you want to delete this project collection? Bookmarks inside it will remain in your general collection.")) return;
+                                  
+                                  // Update all bookmarks associated with this project to projectId = null
+                                  const associated = bookmarks.filter(b => b.projectId === selectedProjectId);
+                                  for (const b of associated) {
+                                    await setDoc(doc(db, "users", targetUid, "bookmarks", b.id), {
+                                      ...b,
+                                      projectId: null
+                                    });
+                                  }
+
+                                  // Delete project document
+                                  await deleteDoc(doc(db, "users", targetUid, "curated_projects", selectedProjectId));
+                                  setSelectedProjectId("all");
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                              >
+                                <Trash2 className="w-4 h-4" /> Delete Collection
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Filtered Tools list with Export Toolbar */}
+                        <div className="space-y-4">
+                          {(() => {
+                            const filteredTools = bookmarkTools.filter(tool => {
+                              const bookmarkObj = bookmarks.find(b => b.toolId === tool.id);
+                              if (!bookmarkObj) return false;
+                              if (selectedProjectId === "all") return true;
+                              if (selectedProjectId === "unassigned") return bookmarkObj.projectId === null;
+                              return bookmarkObj.projectId === selectedProjectId;
+                            });
+
+                            return (
+                              <>
+                                {/* Export & Stats Toolbar */}
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-950/20 border border-slate-800/60 p-4 rounded-2xl gap-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono font-bold text-slate-400">
+                                      {selectedProjectId === "all" ? "All Saved Bookmarks" : selectedProjectId === "unassigned" ? "General Bookmarks" : (curatedProjects.find(p => p.id === selectedProjectId)?.name || "Curated Project")}
+                                    </span>
+                                    <span className="text-[10px] font-mono font-bold bg-slate-900 px-2 py-0.5 rounded text-slate-500">
+                                      {filteredTools.length} {filteredTools.length === 1 ? "tool" : "tools"}
+                                    </span>
+                                  </div>
+
+                                  {filteredTools.length > 0 && (
+                                    <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+                                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Export Project:</span>
+                                      <button
+                                        onClick={() => handleExport("json")}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                      >
+                                        <Download className="w-3.5 h-3.5 text-blue-400" />
+                                        JSON
+                                      </button>
+                                      <button
+                                        onClick={() => handleExport("csv")}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                      >
+                                        <Download className="w-3.5 h-3.5 text-emerald-400" />
+                                        CSV
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  {filteredTools.length > 0 ? (
+                                    filteredTools.map((tool, idx) => (
+                                      <div
+                                        key={tool.id}
+                                        draggable={isOwnProfile}
+                                        onDragStart={(e) => {
+                                          if (isOwnProfile) {
+                                            e.dataTransfer.setData("text/plain", tool.id);
+                                            e.dataTransfer.effectAllowed = "move";
+                                          }
+                                        }}
+                                        className={isOwnProfile ? "cursor-grab active:cursor-grabbing hover:shadow-2xl transition-all hover:scale-[1.01] active:scale-[0.99]" : ""}
+                                        title={isOwnProfile ? "Drag this tool card to a project folder above to move it!" : ""}
+                                      >
+                                        <ToolCard 
+                                          tool={tool} 
+                                          isFavorited={favoriteIds.includes(tool.id)}
+                                          onView={() => onViewTool(tool)}
+                                          onEdit={() => onEditTool(tool)}
+                                          onDelete={() => onDeleteTool(tool)}
+                                          onShare={() => onShareTool(tool)}
+                                          index={idx}
+                                        />
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="col-span-2 py-20 bg-slate-950/30 border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-center font-sans">
+                                      <Bookmark className="w-12 h-12 text-slate-700 mb-4" aria-hidden="true" />
+                                      <h3 className="text-xl font-bold text-white mb-2">Collection is Empty</h3>
+                                      <p className="text-slate-500 max-w-xs">
+                                        {isOwnProfile 
+                                          ? "Bookmark tools and organize them into your projects from their detail panels."
+                                          : `${profile?.displayName || "This user"} has no tools in this curated project yet.`}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
                       </motion.div>
                     )}
 

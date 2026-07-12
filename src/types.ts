@@ -14,6 +14,7 @@ export interface AiTool {
   tags?: string[];
   authorId?: string;
   createdAt: any; // Firestore Timestamp
+  updatedAt?: any; // Firestore Timestamp
   averageRating?: number;
   totalRatingsCount?: number;
   visitCount?: number;
@@ -83,6 +84,20 @@ export interface Comment {
   createdAt: any;
   likesCount?: number;
   parentId?: string;
+}
+
+export interface CuratedProject {
+  id: string;
+  name: string;
+  desc?: string;
+  createdAt: any;
+}
+
+export interface Bookmark {
+  id: string;
+  toolId: string;
+  projectId: string | null;
+  bookmarkedAt: any;
 }
 
 export interface AdminRole {

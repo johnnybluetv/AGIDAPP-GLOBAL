@@ -2,7 +2,7 @@ import * as React from "react";
 import { onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { AiTool, CATEGORIES, Category, UserRole } from "./types";
-import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronRight, BookOpen, Star, Users, BarChart, Cloud, Sun, Moon, ArrowLeftRight, Image as ImageIcon, FileText, Settings, Volume2, VolumeX } from "lucide-react";
+import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronRight, BookOpen, Star, Users, BarChart, Cloud, Sun, Moon, ArrowLeftRight, Image as ImageIcon, FileText, Settings, Volume2, VolumeX, History, Bookmark, Folder } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useSpring } from "motion/react";
 import ToolCard from "./components/ToolCard";
 import { Sparkles, Palette, Code2, Box, Video as VideoIcon } from "lucide-react";
@@ -23,6 +23,7 @@ import VoiceSearch from "./components/VoiceSearch";
 import DriveDashboard from "./components/DriveDashboard";
 import BlazingFire from "./components/BlazingFire";
 import AuthModal from "./components/AuthModal";
+import NewsletterForm from "./components/NewsletterForm";
 import { deleteDoc, doc, updateDoc, setDoc, increment, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { useAuth } from "./context/AuthContext";
 import { Helmet } from "react-helmet-async";
@@ -32,9 +33,15 @@ export default function App() {
   const { user, login } = useAuth();
   const [tools, setTools] = React.useState<AiTool[]>([]);
   const [favorites, setFavorites] = React.useState<string[]>([]);
+  const [bookmarks, setBookmarks] = React.useState<{ id: string; toolId: string; projectId: string | null }[]>([]);
+  const [curatedProjects, setCuratedProjects] = React.useState<{ id: string; name: string; desc?: string }[]>([]);
+  const [showBookmarkMenu, setShowBookmarkMenu] = React.useState(false);
+  const [newProjectName, setNewProjectName] = React.useState("");
+  const [newProjectDesc, setNewProjectDesc] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState<Category | "All">("All");
+  const [selectedQuickSector, setSelectedQuickSector] = React.useState<string>("All");
   const [selectedType, setSelectedType] = React.useState<string>("All");
   const [showFavoritesOnly, setShowFavoritesOnly] = React.useState(false);
   const [isScraping, setIsScraping] = React.useState(false);
@@ -314,6 +321,46 @@ export default function App() {
   const [showSuggestions, setShowSuggestions] = React.useState(false);
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
 
+  // Recent Searches state
+  const [recentSearches, setRecentSearches] = React.useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("agid_recent_searches") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const addRecentSearch = (queryStr: string) => {
+    const trimmed = queryStr.trim();
+    if (!trimmed) return;
+    setRecentSearches(prev => {
+      const next = [trimmed, ...prev.filter(q => q.toLowerCase() !== trimmed.toLowerCase())].slice(0, 5);
+      localStorage.setItem("agid_recent_searches", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const removeRecentSearch = (e: React.MouseEvent, queryStr: string) => {
+    e.stopPropagation();
+    setRecentSearches(prev => {
+      const next = prev.filter(q => q !== queryStr);
+      localStorage.setItem("agid_recent_searches", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const clearRecentSearches = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRecentSearches([]);
+    localStorage.removeItem("agid_recent_searches");
+  };
+
+  const handleSelectRecentSearch = (queryStr: string) => {
+    setSearchQuery(queryStr);
+    handleSearchChange(queryStr);
+    addRecentSearch(queryStr);
+  };
+
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 100,
@@ -382,6 +429,41 @@ export default function App() {
 
     return () => unsubscribe();
   }, [user]);
+
+  // Listen to user bookmarks and curated projects
+  React.useEffect(() => {
+    if (!user) {
+      setBookmarks([]);
+      setCuratedProjects([]);
+      return;
+    }
+
+    const projectsRef = collection(db, "users", user.uid, "curated_projects");
+    const unsubProjects = onSnapshot(projectsRef, (snapshot) => {
+      setCuratedProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/curated_projects`);
+    });
+
+    const bookmarksRef = collection(db, "users", user.uid, "bookmarks");
+    const unsubBookmarks = onSnapshot(bookmarksRef, (snapshot) => {
+      setBookmarks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}/bookmarks`);
+    });
+
+    return () => {
+      unsubProjects();
+      unsubBookmarks();
+    };
+  }, [user]);
+
+  // Reset bookmark menu and fields when selected tool changes
+  React.useEffect(() => {
+    setShowBookmarkMenu(false);
+    setNewProjectName("");
+    setNewProjectDesc("");
+  }, [selectedTool]);
 
   // Check User Role
   React.useEffect(() => {
@@ -534,9 +616,12 @@ export default function App() {
     if (!selectedTool) return;
     try {
       const toolRef = doc(db, "ai_tools", selectedTool.id);
-      await updateDoc(toolRef, editFormData);
+      await updateDoc(toolRef, {
+        ...editFormData,
+        updatedAt: serverTimestamp()
+      });
       setIsEditing(false);
-      setSelectedTool(prev => prev ? { ...prev, ...editFormData } : null);
+      setSelectedTool(prev => prev ? { ...prev, ...editFormData, updatedAt: new Date() } : null);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `ai_tools/${selectedTool.id}`);
     }
@@ -601,6 +686,21 @@ export default function App() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      if (showSuggestions && suggestions.length > 0 && focusedSuggestionIndex >= 0) {
+        e.preventDefault();
+        const tool = suggestions[focusedSuggestionIndex];
+        setSearchQuery(tool.name);
+        setShowSuggestions(false);
+        setSelectedTool(tool);
+        addRecentSearch(tool.name);
+      } else if (searchQuery.trim()) {
+        addRecentSearch(searchQuery);
+        setShowSuggestions(false);
+      }
+      return;
+    }
+
     if (!showSuggestions || suggestions.length === 0) return;
 
     if (e.key === "ArrowDown") {
@@ -609,12 +709,6 @@ export default function App() {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setFocusedSuggestionIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
-    } else if (e.key === "Enter" && focusedSuggestionIndex >= 0) {
-      e.preventDefault();
-      const tool = suggestions[focusedSuggestionIndex];
-      setSearchQuery(tool.name);
-      setShowSuggestions(false);
-      setSelectedTool(tool);
     } else if (e.key === "Tab" && suggestions.length > 0) {
       // Autocomplete with the first suggestion or focused one
       e.preventDefault();
@@ -724,6 +818,35 @@ export default function App() {
       const matchesFavorites = !showFavoritesOnly || favorites.includes(tool.id);
       const matchesTags = activeTags.length === 0 || activeTags.every(tag => tool.tags?.includes(tag));
       
+      // Sector Filter logic
+      let matchesQuickSector = true;
+      if (selectedQuickSector !== "All") {
+        if (selectedQuickSector === "Agentic AI") {
+          matchesQuickSector = tool.tags?.some(t => t.toLowerCase().includes("agent")) || 
+                               tool.name.toLowerCase().includes("agent") || 
+                               tool.desc.toLowerCase().includes("agent");
+        } else if (selectedQuickSector === "Quantum ML") {
+          matchesQuickSector = tool.tags?.some(t => t.toLowerCase().includes("quantum")) || 
+                               tool.name.toLowerCase().includes("quantum") || 
+                               tool.desc.toLowerCase().includes("quantum");
+        } else if (selectedQuickSector === "Robotics & IoT") {
+          matchesQuickSector = tool.tags?.some(t => t.toLowerCase().includes("robot") || t.toLowerCase().includes("iot")) || 
+                               tool.name.toLowerCase().includes("robot") || 
+                               tool.name.toLowerCase().includes("iot") ||
+                               tool.desc.toLowerCase().includes("robot") ||
+                               tool.desc.toLowerCase().includes("iot");
+        } else if (selectedQuickSector === "Neurotech AI") {
+          matchesQuickSector = tool.tags?.some(t => t.toLowerCase().includes("neuro") || t.toLowerCase().includes("brain") || t.toLowerCase().includes("neural")) || 
+                               tool.name.toLowerCase().includes("neuro") || 
+                               tool.name.toLowerCase().includes("neural") ||
+                               tool.desc.toLowerCase().includes("neuro") ||
+                               tool.desc.toLowerCase().includes("neural");
+        } else {
+          // Main category match
+          matchesQuickSector = tool.category === selectedQuickSector;
+        }
+      }
+
       // Pricing Filter logic based on description and tags
       let matchesPricing = true;
       if (pricingFilter === "Free") {
@@ -739,7 +862,7 @@ export default function App() {
         if (interpretedQuery.isDev && tool.type !== "API / Platform") matchesNL = false;
       }
 
-      return matchesCategory && matchesType && matchesFavorites && matchesTags && matchesNL && matchesPricing;
+      return matchesCategory && matchesType && matchesFavorites && matchesTags && matchesNL && matchesPricing && matchesQuickSector;
     }).sort((a, b) => {
       if (sortBy === "newest") {
         const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -751,7 +874,7 @@ export default function App() {
       if (sortBy === "alpha") return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [tools, searchQuery, selectedCategory, selectedType, showFavoritesOnly, favorites, sortBy, activeTags, fuse, interpretedQuery]);
+  }, [tools, searchQuery, selectedCategory, selectedType, showFavoritesOnly, favorites, sortBy, activeTags, fuse, interpretedQuery, selectedQuickSector]);
 
   const handleRateTool = async (toolId: string, rating: number) => {
     if (!user) {
@@ -848,11 +971,51 @@ export default function App() {
         <title>{selectedTool ? `${selectedTool.name} - AI Tool Preview | Agidapp Global` : "AGID - Artificial General Intelligence Directory"}</title>
         <meta name="title" content={selectedTool ? `${selectedTool.name} - AI Tool Preview | Agidapp Global` : "AGID - Artificial General Intelligence Directory"} />
         <meta name="description" content={selectedTool ? selectedTool.desc : "AGIDAPP GLOBAL SOFTWARE Is A comprehensive, live-updating catalog for Ai & AGI tools, software, web apps, platforms, and APKs. Artificial General Intelligence Directory APP(AGIDAPP) Is built for users to discover, compare, and manage trending digital and humanity solutions with Ai & AGI."} />
+        <meta name="keywords" content="AGI, LLM, AI Directory, Machine Learning, AI tools, Artificial General Intelligence, Agidapp, Neural Networks, Deep Learning, AI Directory App" />
         <link rel="canonical" href={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com/"} />
         <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
         {import.meta.env.VITE_GOOGLE_SITE_VERIFICATION && (
           <meta name="google-site-verification" content={import.meta.env.VITE_GOOGLE_SITE_VERIFICATION} />
         )}
+
+        {/* Dynamic Schema Markup (Structured Data) */}
+        <script type="application/ld+json">
+          {JSON.stringify(
+            selectedTool
+              ? {
+                  "@context": "https://schema.org",
+                  "@type": "SoftwareApplication",
+                  "name": selectedTool.name,
+                  "description": selectedTool.desc,
+                  "applicationCategory": "BusinessApplication",
+                  "operatingSystem": "All",
+                  "offers": {
+                    "@type": "Offer",
+                    "price": "0.00",
+                    "priceCurrency": "USD"
+                  },
+                  "aggregateRating": selectedTool.averageRating
+                    ? {
+                        "@type": "AggregateRating",
+                        "ratingValue": selectedTool.averageRating.toFixed(1),
+                        "ratingCount": (selectedTool.totalRatingsCount || 1).toString()
+                      }
+                    : undefined
+                }
+              : {
+                  "@context": "https://schema.org",
+                  "@type": "WebSite",
+                  "name": "AGID - Artificial General Intelligence Directory",
+                  "url": "https://www.agidappglobal.com/",
+                  "description": "AGIDAPP GLOBAL SOFTWARE Is A comprehensive, live-updating catalog for Ai & AGI tools, software, web apps, platforms, and APKs. Artificial General Intelligence Directory APP(AGIDAPP) Is built for users to discover, compare, and manage trending digital and humanity solutions with Ai & AGI.",
+                  "potentialAction": {
+                    "@type": "SearchAction",
+                    "target": "https://www.agidappglobal.com/?search={search_term_string}",
+                    "query-input": "required name=search_term_string"
+                  }
+                }
+          )}
+        </script>
 
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
@@ -1500,12 +1663,59 @@ export default function App() {
 
                   {/* Search Footer Tips */}
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-3 z-20">
-                    <VoiceSearch onResult={(text) => handleSearchChange(text)} />
+                    <VoiceSearch onResult={(text) => { handleSearchChange(text); addRecentSearch(text); }} />
                     <div className="flex gap-1">
                       <kbd className="px-1.5 py-0.5 bg-slate-950 border border-slate-900 rounded text-[9px] text-yellow-400 font-mono">#</kbd>
                       <span className="text-[9px] text-slate-900 font-black uppercase tracking-tighter">to search tags</span>
                     </div>
                   </div>
+
+                  {/* Recent Searches Dropdown when search input is empty but focused */}
+                  <AnimatePresence>
+                    {isSearchFocused && !searchQuery && recentSearches.length > 0 && (
+                      <motion.div
+                        id="recent-searches-dropdown"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute top-full left-0 right-0 mt-3 bg-slate-950/98 border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden backdrop-blur-xl max-h-[300px] overflow-y-auto custom-scrollbar"
+                      >
+                        <div className="p-3 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 flex justify-between items-center bg-slate-900/50">
+                          <span className="flex items-center gap-1.5">
+                            <History className="w-3.5 h-3.5 text-blue-400" />
+                            Recent Tool Queries
+                          </span>
+                          <button
+                            onMouseDown={(e) => clearRecentSearches(e)}
+                            className="text-[9px] bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 px-2 py-0.5 rounded-full font-bold transition-all cursor-pointer"
+                          >
+                            Clear History
+                          </button>
+                        </div>
+                        <div className="py-1">
+                          {recentSearches.map((queryStr, idx) => (
+                            <div
+                              key={idx}
+                              className="px-6 py-3 flex items-center justify-between hover:bg-white/5 transition-all group cursor-pointer"
+                              onMouseDown={() => handleSelectRecentSearch(queryStr)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <History className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-400 transition-colors" />
+                                <span className="text-xs font-bold text-slate-300 group-hover:text-white transition-colors">{queryStr}</span>
+                              </div>
+                              <button
+                                onMouseDown={(e) => removeRecentSearch(e, queryStr)}
+                                className="p-1 hover:bg-white/10 text-slate-500 hover:text-red-400 rounded-lg transition-all"
+                                title="Remove search from history"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Suggestions Dropdown grouped by Category with full Keyboard Navigation */}
                   <AnimatePresence>
@@ -1516,78 +1726,197 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
-                        className="absolute top-full left-0 right-0 mt-3 bg-slate-950/98 border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden max-h-[480px] overflow-y-auto custom-scrollbar backdrop-blur-xl"
+                        className="absolute top-full left-0 right-0 mt-3 bg-slate-950/98 border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden flex flex-col md:flex-row h-[520px] max-h-[90vh] md:max-h-[520px] backdrop-blur-xl"
                       >
-                        <div className="p-3 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 flex justify-between items-center bg-slate-900/50">
-                          <span className="flex items-center gap-1.5">
-                            <Sparkles className="w-3 h-3 text-orange-400 animate-pulse" />
-                            Categorized AI Tools
-                          </span>
-                          <span className="text-[9px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-bold">{suggestions.length} Found</span>
-                        </div>
+                        {/* Left Suggestions List Pane */}
+                        <div className="w-full md:w-3/5 lg:w-2/3 h-full overflow-y-auto custom-scrollbar flex flex-col border-r border-white/5">
+                          <div className="p-3 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 flex justify-between items-center bg-slate-900/50">
+                            <span className="flex items-center gap-1.5">
+                              <Sparkles className="w-3 h-3 text-orange-400 animate-pulse" />
+                              Categorized AI Tools
+                            </span>
+                            <span className="text-[9px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-bold">{suggestions.length} Found</span>
+                          </div>
 
-                        {Object.entries(groupedSuggestions).map(([category, items]) => (
-                          <div key={category} className="border-b border-white/5 last:border-none">
-                            {/* Category Sub-header */}
-                            <div className="py-2.5 px-6 flex items-center gap-2 bg-slate-900/30 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-white/5">
-                              {getCategoryIcon(category)}
-                              <span className="tracking-widest">{category}</span>
-                              <span className="ml-auto text-[8px] opacity-70 bg-white/5 px-1.5 py-0.5 rounded-full">{items.length} matched</span>
-                            </div>
+                          <div className="flex-1">
+                            {Object.entries(groupedSuggestions).map(([category, items]) => (
+                              <div key={category} className="border-b border-white/5 last:border-none">
+                                {/* Category Sub-header */}
+                                <div className="py-2.5 px-6 flex items-center gap-2 bg-slate-900/30 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-white/5">
+                                  {getCategoryIcon(category)}
+                                  <span className="tracking-widest">{category}</span>
+                                  <span className="ml-auto text-[8px] opacity-70 bg-white/5 px-1.5 py-0.5 rounded-full">{items.length} matched</span>
+                                </div>
 
-                            {/* Grouped Tools with keyboard index sync */}
-                            {items.map(({ tool, originalIndex }) => (
-                              <button
-                                key={tool.id}
-                                role="option"
-                                aria-selected={originalIndex === focusedSuggestionIndex}
-                                onClick={() => {
-                                  setSearchQuery(tool.name);
-                                  setShowSuggestions(false);
-                                  setSelectedTool(tool);
-                                }}
-                                className={`w-full px-6 py-3.5 flex items-center justify-between transition-all border-b border-white/5 last:border-none group text-left cursor-pointer ${
-                                  originalIndex === focusedSuggestionIndex 
-                                  ? 'bg-orange-500/15 border-l-2 border-orange-500 text-white pl-5.5' 
-                                  : 'hover:bg-white/5 pl-6'
-                                }`}
-                              >
-                                <div className="flex items-center gap-4 text-left">
-                                  <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center p-1.5 border border-white/10 shadow-inner group-hover:bg-white/10 transition-colors">
-                                    <img 
-                                      src={`https://www.google.com/s2/favicons?domain=${new URL(tool.url).hostname}&sz=64`} 
-                                      alt=""
-                                      className="w-full h-full object-contain"
-                                      referrerPolicy="no-referrer"
-                                    />
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <p className="font-black text-white leading-tight group-hover:text-orange-400 transition-colors uppercase tracking-tight text-sm">
-                                      {tool.name}
-                                    </p>
-                                    <div className="flex items-center gap-2.5 mt-1">
-                                      <span className="text-[10px] text-orange-400 font-mono font-bold uppercase tracking-tighter bg-orange-400/10 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                        <ThumbsUp className="w-2.5 h-2.5" />
-                                        {tool.upvotes}
-                                      </span>
-                                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{tool.category}</span>
-                                      <div className="w-1 h-1 rounded-full bg-slate-700" />
-                                      <span className="text-[9px] text-slate-500 font-medium uppercase tracking-widest">{tool.type}</span>
+                                {/* Grouped Tools with keyboard index sync */}
+                                {items.map(({ tool, originalIndex }) => (
+                                  <button
+                                    key={tool.id}
+                                    role="option"
+                                    aria-selected={originalIndex === focusedSuggestionIndex}
+                                    onMouseEnter={() => setFocusedSuggestionIndex(originalIndex)}
+                                    onClick={() => {
+                                      setSearchQuery(tool.name);
+                                      setShowSuggestions(false);
+                                      setSelectedTool(tool);
+                                      addRecentSearch(tool.name);
+                                    }}
+                                    className={`w-full px-6 py-3.5 flex items-center justify-between transition-all border-b border-white/5 last:border-none group text-left cursor-pointer ${
+                                      originalIndex === focusedSuggestionIndex 
+                                      ? 'bg-orange-500/15 border-l-2 border-orange-500 text-white pl-5.5' 
+                                      : 'hover:bg-white/5 pl-6'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-4 text-left">
+                                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center p-1.5 border border-white/10 shadow-inner group-hover:bg-white/10 transition-colors">
+                                        <img 
+                                          src={`https://www.google.com/s2/favicons?domain=${new URL(tool.url).hostname}&sz=64`} 
+                                          alt=""
+                                          className="w-full h-full object-contain"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <p className="font-black text-white leading-tight group-hover:text-orange-400 transition-colors uppercase tracking-tight text-sm">
+                                          {tool.name}
+                                        </p>
+                                        <div className="flex items-center gap-2.5 mt-1">
+                                          <span className="text-[10px] text-orange-400 font-mono font-bold uppercase tracking-tighter bg-orange-400/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                            <ThumbsUp className="w-2.5 h-2.5" />
+                                            {tool.upvotes}
+                                          </span>
+                                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{tool.category}</span>
+                                          <div className="w-1 h-1 rounded-full bg-slate-700" />
+                                          <span className="text-[9px] text-slate-500 font-medium uppercase tracking-widest">{tool.type}</span>
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
-                                </div>
-                                <div className={`flex items-center gap-3 transition-all ${originalIndex === focusedSuggestionIndex ? 'text-orange-400 translate-x-0 opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0'}`}>
-                                  <div className="flex items-center gap-1">
-                                    {tool.tags?.slice(0, 2).map(tag => (
-                                      <span key={tag} className="text-[8px] text-slate-600 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-bold">#{tag}</span>
-                                    ))}
-                                  </div>
-                                  <ArrowUp className="w-4 h-4 rotate-45" />
-                                </div>
-                              </button>
+                                    <div className={`flex items-center gap-3 transition-all ${originalIndex === focusedSuggestionIndex ? 'text-orange-400 translate-x-0 opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0'}`}>
+                                      <div className="flex items-center gap-1">
+                                        {tool.tags?.slice(0, 2).map(tag => (
+                                          <span key={tag} className="text-[8px] text-slate-600 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-bold">#{tag}</span>
+                                        ))}
+                                      </div>
+                                      <ArrowUp className="w-4 h-4 rotate-45" />
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
                             ))}
                           </div>
-                        ))}
+                        </div>
+
+                        {/* Right live Preview Pane */}
+                        <div className="hidden md:flex md:w-2/5 lg:w-1/3 bg-slate-900/35 flex-col h-full overflow-y-auto custom-scrollbar">
+                          {(() => {
+                            const previewTool = suggestions[focusedSuggestionIndex >= 0 ? focusedSuggestionIndex : 0];
+                            if (!previewTool) return (
+                              <div className="flex flex-col items-center justify-center h-full p-6 text-center text-slate-500">
+                                <Search className="w-8 h-8 opacity-40 mb-3 animate-pulse" />
+                                <p className="text-xs font-mono tracking-widest uppercase">Select or Hover an AI Tool to Preview</p>
+                              </div>
+                            );
+
+                            return (
+                              <AnimatePresence mode="wait">
+                                <motion.div
+                                  key={previewTool.id}
+                                  initial={{ opacity: 0, x: 15 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  exit={{ opacity: 0, x: -15 }}
+                                  transition={{ duration: 0.15 }}
+                                  className="p-6 flex flex-col h-full justify-between"
+                                >
+                                  <div className="space-y-6">
+                                    {/* Logo + Name */}
+                                    <div className="flex items-start gap-4">
+                                      <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center p-2.5 border border-white/10 shadow-lg">
+                                        <img 
+                                          src={`https://www.google.com/s2/favicons?domain=${new URL(previewTool.url).hostname}&sz=64`} 
+                                          alt=""
+                                          className="w-full h-full object-contain"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <h4 className="text-lg font-black text-white uppercase tracking-tight truncate leading-tight">
+                                          {previewTool.name}
+                                        </h4>
+                                        <a 
+                                          href={previewTool.url} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer" 
+                                          className="text-xs text-orange-400/80 hover:text-orange-400 font-mono flex items-center gap-1 mt-1 truncate"
+                                        >
+                                          <Globe className="w-3 h-3 flex-shrink-0" />
+                                          <span className="truncate">{new URL(previewTool.url).hostname}</span>
+                                        </a>
+                                      </div>
+                                    </div>
+
+                                    {/* Categories & Type info */}
+                                    <div className="flex flex-wrap gap-2">
+                                      <span className="text-[9px] bg-slate-850 text-slate-300 px-2 py-1 rounded border border-white/5 font-black uppercase tracking-widest">
+                                        {previewTool.category}
+                                      </span>
+                                      <span className="text-[9px] bg-slate-850 text-slate-300 px-2 py-1 rounded border border-white/5 font-black uppercase tracking-widest">
+                                        {previewTool.type}
+                                      </span>
+                                    </div>
+
+                                    {/* Description Preview Section */}
+                                    <div className="space-y-2">
+                                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-mono">
+                                        DIRECTORY PREVIEW SUMMARY
+                                      </p>
+                                      <div className="bg-slate-950/50 border border-white/5 rounded-xl p-3.5 shadow-inner">
+                                        <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                                          {previewTool.desc.length > 180 ? `${previewTool.desc.slice(0, 180)}...` : previewTool.desc}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Quick Stats */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Upvotes</span>
+                                        <span className="text-base font-black text-orange-400 font-mono">{previewTool.upvotes}</span>
+                                      </div>
+                                      <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Rating</span>
+                                        <span className="text-base font-black text-amber-400 font-mono">
+                                          {previewTool.averageRating ? `${previewTool.averageRating.toFixed(1)}/5` : "N/A"}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Tags Cloud */}
+                                    {previewTool.tags && previewTool.tags.length > 0 && (
+                                      <div className="space-y-1.5">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-mono">Tags</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {previewTool.tags.slice(0, 4).map(tag => (
+                                            <span key={tag} className="text-[9px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded border border-slate-900 font-bold">
+                                              #{tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Bottom Footer Tip */}
+                                  <div className="border-t border-white/5 pt-4 text-center">
+                                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider flex items-center justify-center gap-1">
+                                      <span>Click or Press Enter to Open</span>
+                                      <ChevronRight className="w-3 h-3 text-orange-400 animate-pulse" />
+                                    </p>
+                                  </div>
+                                </motion.div>
+                              </AnimatePresence>
+                            );
+                          })()}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -1877,7 +2206,53 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {!loading && (searchQuery || selectedCategory !== "All" || selectedType !== "All" || showFavoritesOnly) && (
+          {/* Persistent Quick Category / Sector Navigation Bar */}
+          <div className="mb-12" id="quick-category-nav">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-1.5 h-3 bg-blue-600 rounded-full animate-pulse" />
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest font-mono">Quick Sector Navigation</h3>
+            </div>
+            
+            <div className="flex items-center gap-2 pb-2 overflow-x-auto scrollbar-none scroll-smooth">
+              <button
+                onClick={() => setSelectedQuickSector("All")}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap border cursor-pointer ${
+                  selectedQuickSector === "All"
+                    ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/25 font-black"
+                    : "bg-slate-900 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:border-slate-700"
+                }`}
+              >
+                🌌 All Sectors
+              </button>
+
+              {[
+                { name: "Agentic AI", icon: "🤖" },
+                { name: "Quantum ML", icon: "⚛️" },
+                { name: "LLM & Chat", icon: "💬" },
+                { name: "Image & Art", icon: "🎨" },
+                { name: "Developer Tools", icon: "🛠️" },
+                { name: "Productivity", icon: "📈" },
+                { name: "Audio & Video", icon: "🎥" },
+                { name: "Robotics & IoT", icon: "⚙️" },
+                { name: "Neurotech AI", icon: "🧠" }
+              ].map((sector) => (
+                <button
+                  key={sector.name}
+                  onClick={() => setSelectedQuickSector(sector.name)}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap border cursor-pointer flex items-center gap-2 ${
+                    selectedQuickSector === sector.name
+                      ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/25 font-black"
+                      : "bg-slate-900 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:border-slate-700"
+                  }`}
+                >
+                  <span>{sector.icon}</span>
+                  <span>{sector.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {!loading && (searchQuery || selectedCategory !== "All" || selectedType !== "All" || showFavoritesOnly || selectedQuickSector !== "All") && (
             <div 
               role="alert" 
               aria-live="polite" 
@@ -1889,6 +2264,9 @@ export default function App() {
                 </p>
                 {selectedCategory !== "All" && (
                   <span className="text-[10px] uppercase font-bold text-slate-600 bg-white/5 px-2 py-0.5 rounded border border-white/5">{selectedCategory}</span>
+                )}
+                {selectedQuickSector !== "All" && (
+                  <span className="text-[10px] uppercase font-bold text-blue-400 bg-blue-600/5 px-2 py-0.5 rounded border border-blue-500/20">{selectedQuickSector}</span>
                 )}
                 {selectedType !== "All" && (
                   <span className="text-[10px] uppercase font-bold text-slate-600 bg-white/5 px-2 py-0.5 rounded border border-white/5">{selectedType}</span>
@@ -1904,6 +2282,7 @@ export default function App() {
                 onClick={() => {
                   setSearchQuery("");
                   setSelectedCategory("All");
+                  setSelectedQuickSector("All");
                   setSelectedType("All");
                   setShowFavoritesOnly(false);
                   setActiveTags([]);
@@ -2014,6 +2393,9 @@ export default function App() {
             </motion.div>
           )}
         </section>
+
+        {/* Newsletter Section */}
+        <NewsletterForm />
 
         {/* Submission Section */}
         <SubmitForm />
@@ -2357,6 +2739,20 @@ export default function App() {
                         </button>
                       )}
 
+                      {user && (
+                        <button 
+                          onClick={() => setShowBookmarkMenu(!showBookmarkMenu)}
+                          className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+                            bookmarks.some(b => b.toolId === selectedTool.id)
+                            ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                            : "bg-slate-800 text-white hover:bg-slate-750"
+                          }`}
+                        >
+                          <Bookmark className={`w-5 h-5 ${bookmarks.some(b => b.toolId === selectedTool.id) ? "fill-current" : ""}`} />
+                          {bookmarks.some(b => b.toolId === selectedTool.id) ? "Bookmarked" : "Bookmark"}
+                        </button>
+                      )}
+
                       <button 
                          onClick={() => handleEditTool(selectedTool)}
                         className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border border-slate-700 text-slate-300 rounded-xl font-bold hover:bg-slate-800 transition-all"
@@ -2370,6 +2766,146 @@ export default function App() {
                         <Trash2 className="w-5 h-5" /> Delete
                       </button>
                     </div>
+
+                    {/* Bookmark Curated Projects Dropdown/Sub-panel */}
+                    <AnimatePresence>
+                      {user && showBookmarkMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden mt-4 bg-slate-950/80 border border-slate-800/80 rounded-2xl p-5 space-y-4"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                              <Bookmark className="w-4 h-4 text-orange-500" /> Save to Curated Project
+                            </h5>
+                            <button
+                              onClick={() => setShowBookmarkMenu(false)}
+                              className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors"
+                            >
+                              Close
+                            </button>
+                          </div>
+
+                          {/* Project list */}
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                            {/* Unassigned / General Bookmark */}
+                            <button
+                              onClick={async () => {
+                                const bRef = doc(db, "users", user.uid, "bookmarks", selectedTool.id);
+                                await setDoc(bRef, {
+                                  toolId: selectedTool.id,
+                                  projectId: null,
+                                  bookmarkedAt: new Date()
+                                });
+                              }}
+                              className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                                bookmarks.some(b => b.toolId === selectedTool.id && b.projectId === null)
+                                ? "bg-orange-500/10 border-orange-500/40 text-orange-400"
+                                : "bg-slate-900/40 border-slate-800/80 text-slate-300 hover:border-slate-700"
+                              }`}
+                            >
+                              <div>
+                                <span className="font-bold text-sm block">General Bookmarks</span>
+                                <span className="text-[10px] text-slate-500 block">Unassigned to any specific curated project</span>
+                              </div>
+                              {bookmarks.some(b => b.toolId === selectedTool.id && b.projectId === null) && (
+                                <span className="text-xs font-mono font-bold uppercase tracking-widest bg-orange-500/20 px-2 py-0.5 rounded">Active</span>
+                              )}
+                            </button>
+
+                            {curatedProjects.map((proj) => {
+                              const isSelected = bookmarks.some(b => b.toolId === selectedTool.id && b.projectId === proj.id);
+                              return (
+                                <button
+                                  key={proj.id}
+                                  onClick={async () => {
+                                    const bRef = doc(db, "users", user.uid, "bookmarks", selectedTool.id);
+                                    await setDoc(bRef, {
+                                      toolId: selectedTool.id,
+                                      projectId: proj.id,
+                                      bookmarkedAt: new Date()
+                                    });
+                                  }}
+                                  className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                                    isSelected
+                                    ? "bg-orange-500/10 border-orange-500/40 text-orange-400"
+                                    : "bg-slate-900/40 border-slate-800/80 text-slate-300 hover:border-slate-700"
+                                  }`}
+                                >
+                                  <div className="truncate pr-4">
+                                    <span className="font-bold text-sm block truncate">{proj.name}</span>
+                                    {proj.desc && <span className="text-[10px] text-slate-500 block truncate">{proj.desc}</span>}
+                                  </div>
+                                  {isSelected && (
+                                    <span className="text-xs font-mono font-bold uppercase tracking-widest bg-orange-500/20 px-2 py-0.5 rounded shrink-0">Active</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Remove Bookmark completely if bookmarked */}
+                          {bookmarks.some(b => b.toolId === selectedTool.id) && (
+                            <button
+                              onClick={async () => {
+                                const bRef = doc(db, "users", user.uid, "bookmarks", selectedTool.id);
+                                await deleteDoc(bRef);
+                              }}
+                              className="w-full py-2 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 font-bold rounded-xl text-xs uppercase tracking-widest transition-all"
+                            >
+                              Remove Bookmark completely
+                            </button>
+                          )}
+
+                          {/* Inline Create Curated Project Form */}
+                          <div className="pt-3 border-t border-slate-900 space-y-2">
+                            <span className="text-[10px] uppercase font-mono font-bold tracking-widest text-slate-500 block">Create & Save to New Curated Project</span>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Project Name"
+                                value={newProjectName}
+                                onChange={(e) => setNewProjectName(e.target.value)}
+                                className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-slate-700"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Description (optional)"
+                                value={newProjectDesc}
+                                onChange={(e) => setNewProjectDesc(e.target.value)}
+                                className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-slate-700"
+                              />
+                              <button
+                                onClick={async () => {
+                                  if (!newProjectName.trim()) return;
+                                  const newProjId = "proj_" + Date.now();
+                                  const pRef = doc(db, "users", user.uid, "curated_projects", newProjId);
+                                  await setDoc(pRef, {
+                                    name: newProjectName.trim(),
+                                    desc: newProjectDesc.trim(),
+                                    createdAt: new Date()
+                                  });
+                                  const bRef = doc(db, "users", user.uid, "bookmarks", selectedTool.id);
+                                  await setDoc(bRef, {
+                                    toolId: selectedTool.id,
+                                    projectId: newProjId,
+                                    bookmarkedAt: new Date()
+                                  });
+                                  setNewProjectName("");
+                                  setNewProjectDesc("");
+                                }}
+                                disabled={!newProjectName.trim()}
+                                className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:hover:bg-orange-500 text-slate-950 font-bold rounded-xl text-xs tracking-widest transition-all"
+                              >
+                                Create & Save
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     <CommentSection id={selectedTool.id} type="tool" isAdmin={userRole !== "User"} />
 
