@@ -68,6 +68,62 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Dynamic Sitemap Generator for Google Search indexing
+  app.get("/sitemap.xml", async (req, res) => {
+    try {
+      const baseUrl = "https://www.agidappglobal.com/";
+      const urls: string[] = [
+        baseUrl, // Homepage with trailing slash explicitly
+      ];
+
+      // Fetch all AI tools dynamically
+      try {
+        const toolsSnap = await getDocs(collection(db, "ai_tools"));
+        toolsSnap.forEach((doc) => {
+          urls.push(`https://www.agidappglobal.com/tool/${doc.id}`);
+        });
+      } catch (err) {
+        console.error("Sitemap Tools Fetch Error:", err);
+      }
+
+      // Fetch all Blog articles dynamically
+      try {
+        const articlesSnap = await getDocs(collection(db, "articles"));
+        articlesSnap.forEach((doc) => {
+          urls.push(`https://www.agidappglobal.com/blog/${doc.id}`);
+        });
+      } catch (err) {
+        console.error("Sitemap Articles Fetch Error:", err);
+      }
+
+      // Build standard dynamic XML sitemap
+      const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map((url) => {
+    return `  <url>
+    <loc>${url}</loc>
+    <changefreq>daily</changefreq>
+    <priority>${url === baseUrl ? "1.0" : "0.8"}</priority>
+  </url>`;
+  })
+  .join("\n")}
+</urlset>`;
+
+      res.header("Content-Type", "application/xml");
+      res.send(sitemapXml);
+    } catch (error) {
+      console.error("Sitemap generation error:", error);
+      res.status(500).send("Error generating sitemap");
+    }
+  });
+
+  // Google AdSense Authorization Route
+  app.get("/ads.txt", (req, res) => {
+    res.set("Content-Type", "text/plain");
+    res.send("google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0");
+  });
+
   // Share Route for Rich Previews
   app.get("/share/:toolId", async (req, res) => {
     try {

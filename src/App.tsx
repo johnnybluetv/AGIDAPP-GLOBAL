@@ -264,6 +264,35 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Dynamically inject Google Analytics (gtag.js) for SEO tracking
+  React.useEffect(() => {
+    const trackingId = import.meta.env.VITE_GOOGLE_ANALYTICS_ID;
+    if (trackingId) {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${trackingId}`;
+      document.head.appendChild(script);
+
+      const inlineScript = document.createElement("script");
+      inlineScript.innerHTML = `
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '${trackingId}');
+      `;
+      document.head.appendChild(inlineScript);
+
+      return () => {
+        try {
+          document.head.removeChild(script);
+          document.head.removeChild(inlineScript);
+        } catch (e) {
+          // Ignore removal errors if clean up occurs after page reload
+        }
+      };
+    }
+  }, []);
+
   const screenConfigs = {
     Fluid: { width: "100%", height: "100%", scale: 1 },
     Mobile: { width: "375px", height: "667px", scale: 0.8 },
@@ -816,24 +845,28 @@ export default function App() {
     >
       <Helmet>
         {/* Primary Meta Tags */}
-        <title>{selectedTool ? `${selectedTool.name} - AI Tool Preview | Agidapp Global` : "Agidapp Global"}</title>
-        <meta name="title" content={selectedTool ? `${selectedTool.name} - AI Tool Preview | Agidapp Global` : "Agidapp Global"} />
-        <meta name="description" content={selectedTool ? selectedTool.desc : "Discover Agidapp Global, the most comprehensive directory of AI tools, mobile APKs, and LLM platforms. Join the largest community of AI enthusiasts."} />
-        <link rel="canonical" href={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com"} />
+        <title>{selectedTool ? `${selectedTool.name} - AI Tool Preview | Agidapp Global` : "AGID - Artificial General Intelligence Directory"}</title>
+        <meta name="title" content={selectedTool ? `${selectedTool.name} - AI Tool Preview | Agidapp Global` : "AGID - Artificial General Intelligence Directory"} />
+        <meta name="description" content={selectedTool ? selectedTool.desc : "AGIDAPP GLOBAL SOFTWARE Is A comprehensive, live-updating catalog for Ai & AGI tools, software, web apps, platforms, and APKs. Artificial General Intelligence Directory APP(AGIDAPP) Is built for users to discover, compare, and manage trending digital and humanity solutions with Ai & AGI."} />
+        <link rel="canonical" href={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com/"} />
+        <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+        {import.meta.env.VITE_GOOGLE_SITE_VERIFICATION && (
+          <meta name="google-site-verification" content={import.meta.env.VITE_GOOGLE_SITE_VERIFICATION} />
+        )}
 
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="Agidapp Global" />
-        <meta property="og:url" content={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com"} />
-        <meta property="og:title" content={selectedTool ? `${selectedTool.name} - Discover on Agidapp Global` : "Agidapp Global"} />
-        <meta property="og:description" content={selectedTool ? selectedTool.desc : "Discover Agidapp Global, the most comprehensive directory of AI tools, mobile APKs, and LLM platforms. Join the largest community of AI enthusiasts."} />
+        <meta property="og:url" content={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com/"} />
+        <meta property="og:title" content={selectedTool ? `${selectedTool.name} - Discover on Agidapp Global` : "AGID - Artificial General Intelligence Directory"} />
+        <meta property="og:description" content={selectedTool ? selectedTool.desc : "AGIDAPP GLOBAL SOFTWARE Is A comprehensive, live-updating catalog for Ai & AGI tools, software, web apps, platforms, and APKs. Artificial General Intelligence Directory APP(AGIDAPP) Is built for users to discover, compare, and manage trending digital and humanity solutions with Ai & AGI."} />
         <meta property="og:image" content="https://www.agidappglobal.com/logo.png" />
 
         {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:url" content={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com"} />
-        <meta name="twitter:title" content={selectedTool ? `${selectedTool.name} - Discover on Agidapp Global` : "Agidapp Global"} />
-        <meta name="twitter:description" content={selectedTool ? selectedTool.desc : "Discover Agidapp Global, the most comprehensive directory of AI tools, mobile APKs, and LLM platforms. Join the largest community of AI enthusiasts."} />
+        <meta name="twitter:url" content={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com/"} />
+        <meta name="twitter:title" content={selectedTool ? `${selectedTool.name} - Discover on Agidapp Global` : "AGID - Artificial General Intelligence Directory"} />
+        <meta name="twitter:description" content={selectedTool ? selectedTool.desc : "AGIDAPP GLOBAL SOFTWARE Is A comprehensive, live-updating catalog for Ai & AGI tools, software, web apps, platforms, and APKs. Artificial General Intelligence Directory APP(AGIDAPP) Is built for users to discover, compare, and manage trending digital and humanity solutions with Ai & AGI."} />
         <meta name="twitter:image" content="https://www.agidappglobal.com/logo.png" />
       </Helmet>
       {/* Waterfall Desktop Lane */}
