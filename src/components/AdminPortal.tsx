@@ -11,7 +11,7 @@ interface AdminPortalProps {
   onClose: () => void;
 }
 
-type AdminTab = 'staff' | 'analytics' | 'notifications' | 'import';
+type AdminTab = 'staff' | 'analytics' | 'notifications' | 'import' | 'seo';
 
 export default function AdminPortal({ onClose }: AdminPortalProps) {
   const { user } = useAuth();
@@ -30,6 +30,24 @@ export default function AdminPortal({ onClose }: AdminPortalProps) {
   const [importStatus, setImportStatus] = React.useState<"idle" | "parsing" | "saving" | "success" | "error">("idle");
   const [importMessage, setImportMessage] = React.useState("");
   const [parsedTools, setParsedTools] = React.useState<any[]>([]);
+
+  // SEO & Indexing Control State
+  const [pinging, setPinging] = React.useState(false);
+  const [pingResult, setPingResult] = React.useState<any>(null);
+
+  const handlePingSearchEngines = async () => {
+    setPinging(true);
+    setPingResult(null);
+    try {
+      const res = await fetch("/api/seo/ping", { method: "POST" });
+      const data = await res.json();
+      setPingResult(data);
+    } catch (err: any) {
+      setPingResult({ success: false, error: err.message });
+    } finally {
+      setPinging(false);
+    }
+  };
 
   React.useEffect(() => {
     const qAdmins = query(collection(db, "admins"));
@@ -256,10 +274,19 @@ export default function AdminPortal({ onClose }: AdminPortalProps) {
                 </button>
                 <div className="w-px h-2 bg-slate-800 mx-1" />
                 <button 
+                  type="button"
                   onClick={() => setActiveTab('import')}
                   className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'import' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                 >
                   <Plus className="w-3 h-3 inline mr-1.5" /> Import Tools
+                </button>
+                <div className="w-px h-2 bg-slate-800 mx-1" />
+                <button 
+                  type="button"
+                  onClick={() => setActiveTab('seo')}
+                  className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'seo' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  <Globe className="w-3 h-3 inline mr-1.5" /> SEO & Indexing
                 </button>
               </div>
             </div>
@@ -613,6 +640,133 @@ export default function AdminPortal({ onClose }: AdminPortalProps) {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          {activeTab === 'seo' && (
+            <div className="space-y-8 text-left">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">SEO & Search Indexing Hub</h3>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Manage and request Google & Bing index crawl cycles instantly</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Status Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Google Site Verification Status */}
+                <div className="bg-slate-950/50 border border-slate-800 p-6 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Google Verification Tag</h4>
+                    <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest rounded">
+                      Active In Head
+                    </span>
+                  </div>
+                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl font-mono text-xs text-slate-300 break-all">
+                    {import.meta.env.VITE_GOOGLE_SITE_VERIFICATION ? (
+                      <span className="text-blue-400 font-bold">{import.meta.env.VITE_GOOGLE_SITE_VERIFICATION}</span>
+                    ) : (
+                      <span className="text-slate-500 italic">No environment VITE_GOOGLE_SITE_VERIFICATION set (using default fallback)</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-normal">
+                    The Verification Tag is dynamically compiled into both the HTML shell (`/index.html`) and injected inside the header runtime.
+                  </p>
+                </div>
+
+                {/* Sitemap Status */}
+                <div className="bg-slate-950/50 border border-slate-800 p-6 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Dynamic XML Sitemap</h4>
+                    <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-black uppercase tracking-widest rounded">
+                      Live Generator
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl">
+                    <span className="text-xs font-mono text-slate-300 truncate mr-2">/sitemap.xml</span>
+                    <a 
+                      href="/sitemap.xml" 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5"
+                    >
+                      View XML
+                    </a>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-normal">
+                    Generates valid sitemap listings on-the-fly for every AI tool, categories, and articles registered in your Firestore database.
+                  </p>
+                </div>
+              </div>
+
+              {/* Indexing Requests Actions */}
+              <div className="bg-slate-950/50 border border-slate-800 p-8 rounded-3xl space-y-6">
+                <div>
+                  <h4 className="text-sm font-black text-white uppercase tracking-tight">Crawl Request Command (Ping)</h4>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Submit your sitemap directly to search engines to speed up tool indexation</p>
+                </div>
+
+                <div className="flex flex-wrap gap-4">
+                  <button
+                    onClick={handlePingSearchEngines}
+                    disabled={pinging}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-600/10"
+                  >
+                    {pinging ? "Dispatching Pings..." : "Trigger Sitemap Crawl Request"}
+                  </button>
+                </div>
+
+                {pingResult && (
+                  <div className={`p-5 rounded-2xl text-xs font-medium space-y-3 ${
+                    pingResult.success ? "bg-green-500/5 border border-green-500/15 text-green-300" : "bg-red-500/5 border border-red-500/15 text-red-300"
+                  }`}>
+                    <p className="font-bold flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${pingResult.success ? "bg-green-500" : "bg-red-500"}`} />
+                      {pingResult.success ? "Sitemap Submission Results:" : "Submission Failed:"}
+                    </p>
+                    {pingResult.success ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 text-[11px] font-mono">
+                        <div className="bg-slate-900 border border-white/5 p-3 rounded-xl flex items-center justify-between">
+                          <span>Google Bot Ping:</span>
+                          <span className={pingResult.results?.google?.ok ? "text-emerald-400 font-bold" : "text-amber-400"}>
+                            {pingResult.results?.google?.status ? `Status ${pingResult.results.google.status}` : "Queued/Redirected"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-900 border border-white/5 p-3 rounded-xl flex items-center justify-between">
+                          <span>Bing Bot Ping:</span>
+                          <span className={pingResult.results?.bing?.ok ? "text-emerald-400 font-bold" : "text-amber-400"}>
+                            {pingResult.results?.bing?.status ? `Status ${pingResult.results.bing.status}` : "Queued/Redirected"}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="font-mono text-[11px] text-red-400">{pingResult.error || "Unknown server-side error"}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Checklist / Education to Request Google Indexing */}
+              <div className="bg-slate-950/50 border border-slate-850 p-8 rounded-3xl space-y-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  <h4 className="text-xs font-black text-white uppercase tracking-widest">Google Search Console Indexing Steps</h4>
+                </div>
+                <div className="text-xs text-slate-400 space-y-3 leading-relaxed">
+                  <p>Because search engines require site ownership verification to execute immediate crawling, complete these steps to index your directory pages within minutes:</p>
+                  <ol className="list-decimal list-inside space-y-2 pl-2">
+                    <li>Open <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="text-blue-400 font-bold hover:underline">Google Search Console</a>.</li>
+                    <li>Add your custom domain: <code className="bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded text-blue-300">https://www.agidappglobal.com</code></li>
+                    <li>Select <strong>HTML Tag</strong> verification and verify using the key shown above.</li>
+                    <li>Go to the <strong>Sitemaps</strong> section on the left sidebar and paste: <code className="bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded text-blue-300">sitemap.xml</code>, then click Submit.</li>
+                    <li>Use the top search bar (URL Inspection) to paste any specific AI tool or article link, then click <strong>"Request Indexing"</strong> to force immediate crawlers to index that page.</li>
+                  </ol>
+                </div>
               </div>
             </div>
           )}

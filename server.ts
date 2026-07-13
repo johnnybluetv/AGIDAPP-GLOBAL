@@ -133,6 +133,38 @@ ${urls
     res.send("google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0");
   });
 
+  // Dynamic SEO Search Engine Sitemap Ping Endpoint
+  app.post("/api/seo/ping", async (req, res) => {
+    try {
+      const sitemapUrl = "https://www.agidappglobal.com/sitemap.xml";
+      const responses: any = {};
+
+      try {
+        const googlePing = await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+        responses.google = { status: googlePing.status, ok: googlePing.ok };
+      } catch (err: any) {
+        responses.google = { error: err.message };
+      }
+
+      try {
+        const bingPing = await fetch(`https://www.bing.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+        responses.bing = { status: bingPing.status, ok: bingPing.ok };
+      } catch (err: any) {
+        responses.bing = { error: err.message };
+      }
+
+      res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        sitemapUrl,
+        results: responses
+      });
+    } catch (error: any) {
+      console.error("SEO ping error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Share Route for Rich Previews
   app.get("/share/:toolId", async (req, res) => {
     try {

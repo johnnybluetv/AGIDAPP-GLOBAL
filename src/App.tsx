@@ -24,6 +24,7 @@ import DriveDashboard from "./components/DriveDashboard";
 import BlazingFire from "./components/BlazingFire";
 import AuthModal from "./components/AuthModal";
 import NewsletterForm from "./components/NewsletterForm";
+import LegalContactModal from "./components/LegalContactModal";
 import { deleteDoc, doc, updateDoc, setDoc, increment, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { useAuth } from "./context/AuthContext";
 import { Helmet } from "react-helmet-async";
@@ -96,6 +97,9 @@ export default function App() {
 
   // Spinning Galaxy State
   const [showSpinningGalaxy, setShowSpinningGalaxy] = React.useState(false);
+
+  // Legal, Privacy, Contact Modal State
+  const [legalModalTab, setLegalModalTab] = React.useState<'terms' | 'privacy' | 'contact' | null>(null);
 
   // Sound preference state
   const [soundPreference, setSoundPreference] = React.useState<'enabled' | 'disabled' | 'unasked'>(() => {
@@ -2402,14 +2406,44 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-slate-900 bg-slate-950">
+      <footer className="py-12 border-t border-slate-900 bg-slate-950 relative z-20">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2 opacity-50">
-             <div className="px-2 py-0.5 bg-white text-black font-black tracking-tighter text-sm rounded">
-                Agidapp Global
-              </div>
-              <span className="text-xs font-mono">v1.2.0-STABLE</span>
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div className="flex items-center gap-2 opacity-50">
+               <div className="px-2 py-0.5 bg-white text-black font-black tracking-tighter text-sm rounded">
+                  Agidapp Global
+                </div>
+                <span className="text-xs font-mono">v1.2.0-STABLE</span>
+            </div>
+            
+            {/* Quick Legal and Contact Links */}
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-5 text-xs text-slate-400 font-bold uppercase tracking-wider">
+              <button 
+                type="button"
+                onClick={() => setLegalModalTab('terms')}
+                className="hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                Terms of Service
+              </button>
+              <span className="text-slate-800 hidden xs:inline">•</span>
+              <button 
+                type="button"
+                onClick={() => setLegalModalTab('privacy')}
+                className="hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                Privacy Policy
+              </button>
+              <span className="text-slate-800 hidden xs:inline">•</span>
+              <button 
+                type="button"
+                onClick={() => setLegalModalTab('contact')}
+                className="hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                Contact & Address
+              </button>
+            </div>
           </div>
+          
           <div className="text-slate-600 text-xs text-center md:text-right">
             &copy; 2026 Agidapp Global. <br/>
             Engineered for the Silicon Age.
@@ -3050,6 +3084,13 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Legal & Contact Hub Modal */}
+      <LegalContactModal 
+        isOpen={legalModalTab !== null} 
+        onClose={() => setLegalModalTab(null)} 
+        initialTab={legalModalTab || 'terms'} 
+      />
 
       <AnimatePresence>
         {showOnboarding && (

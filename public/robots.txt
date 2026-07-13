@@ -1,4 +1,15 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /search/
+Disallow: /drafts/
 
+# Prevent bots from indexing temporary or administrative parameters
+Disallow: /*?*search=
+Disallow: /*?*filter=
+Disallow: /*?*sort=
+
+# Direct search bots to the dynamic sitemap endpoint
 Sitemap: https://www.agidappglobal.com/sitemap.xml
+

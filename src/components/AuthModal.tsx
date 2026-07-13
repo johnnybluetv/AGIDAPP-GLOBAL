@@ -13,7 +13,12 @@ import {
   Loader2, 
   AlertCircle,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  ExternalLink
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { ConfirmationResult, RecaptchaVerifier } from "firebase/auth";
@@ -56,6 +61,17 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', onS
   // Recaptcha verifier ref/state
   const [recaptchaVerifier, setRecaptchaVerifier] = React.useState<RecaptchaVerifier | null>(null);
 
+  // Custom visual enhancement states
+  const [unauthorizedDomain, setUnauthorizedDomain] = React.useState<string | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopyDomain = () => {
+    navigator.clipboard.writeText(window.location.host);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   // Sync mode with prop
   React.useEffect(() => {
     if (isOpen) {
@@ -70,6 +86,9 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', onS
       setPhoneNumber("");
       setVerificationCode("");
       setConfirmationResult(null);
+      setUnauthorizedDomain(null);
+      setShowPassword(false);
+      setCopied(false);
     }
   }, [isOpen, initialMode]);
 
@@ -134,7 +153,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', onS
     } catch (err: any) {
       console.error(`${provider} Login failed:`, err);
       // Fallback description for standard OAuth providers if not configured in Firebase console
-      if (err.code === 'auth/operation-not-allowed') {
+      if (err.code === 'auth/unauthorized-domain') {
+        setUnauthorizedDomain(window.location.host);
+        setError("Firebase Domain Blocked: This preview/custom domain is not authorized in your Firebase console. See step-by-step instructions below.");
+      } else if (err.code === 'auth/operation-not-allowed') {
         setError(`This sign-in provider (${provider}) is not yet enabled in your Firebase console. Go to Auth -> Sign-in method to enable it.`);
       } else {
         setError(err.message || `An error occurred while logging in with ${provider}`);
@@ -344,10 +366,63 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', onS
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-left flex items-start gap-3"
+                    className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-left flex flex-col gap-3"
                   >
-                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs font-medium leading-relaxed">{error}</p>
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
+                      <p className="text-xs font-semibold leading-relaxed">{error}</p>
+                    </div>
+
+                    {unauthorizedDomain && (
+                      <div className="mt-2 p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Unresolved Environment Domain</span>
+                          <span className="text-[9px] font-mono font-bold text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">BLOCKED</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
+                          Firebase requires whitelisting your app's temporary or custom domain so that secure popups function safely.
+                        </p>
+                        
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Your Current Domain:</label>
+                          <div className="flex gap-1">
+                            <code className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[10px] text-slate-300 font-mono select-all break-all leading-tight">
+                              {unauthorizedDomain}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={handleCopyDomain}
+                              className="px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shrink-0"
+                            >
+                              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{copied ? "Copied" : "Copy"}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 border-t border-white/5 pt-2">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Required Configurations:</label>
+                          <div className="text-[10px] text-slate-400 space-y-1.5">
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-blue-400 font-black">1.</span>
+                              <span>Open your <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline font-bold inline-flex items-center gap-0.5">Firebase Console <ExternalLink className="w-2.5 h-2.5" /></a></span>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-blue-400 font-black">2.</span>
+                              <span>Navigate to your project <strong className="text-white">gen-lang-client-0399786822</strong></span>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-blue-400 font-black">3.</span>
+                              <span>Go to <strong className="text-white">Authentication &rarr; Settings &rarr; Authorized domains</strong></span>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-blue-400 font-black">4.</span>
+                              <span>Add <strong className="text-white">{unauthorizedDomain}</strong> and <strong className="text-white">agidappglobal.com</strong> to the list!</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
 
@@ -476,13 +551,21 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', onS
                         <div className="relative">
                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                           <input
-                            type="password"
+                            type={showPassword ? "text" : "password"}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="••••••••"
                             disabled={loading}
-                            className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-all"
+                            className="w-full pl-10 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-all"
                           />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 focus:outline-none"
+                            title={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
                         </div>
                       </div>
 
@@ -621,12 +704,13 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', onS
                 </AnimatePresence>
 
                 {/* Switch Signin / Signup triggers */}
-                {method === 'menu' && (
+                {(method === 'menu' || method === 'email') && (
                   <div className="mt-6 text-xs text-slate-500 font-bold uppercase tracking-wider">
                     {mode === 'signup' ? (
                       <>
                         Already have an account?{" "}
                         <button
+                          type="button"
                           onClick={() => setMode('signin')}
                           className="text-blue-400 hover:text-blue-300 hover:underline transition-all"
                         >
@@ -637,6 +721,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin', onS
                       <>
                         First time visiting?{" "}
                         <button
+                          type="button"
                           onClick={() => setMode('signup')}
                           className="text-blue-400 hover:text-blue-300 hover:underline transition-all"
                         >
