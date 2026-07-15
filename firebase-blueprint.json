@@ -165,6 +165,20 @@
         "bookmarkedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["toolId", "bookmarkedAt"]
+    },
+    "VoiceComment": {
+      "title": "Voice Comment",
+      "description": "A voice review comment left on a tool",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "voiceBase64": { "type": "string", "description": "Base64 encoded audio data" },
+        "duration": { "type": "integer", "description": "Duration of the voice review in seconds" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "voiceBase64", "duration", "createdAt"]
     }
   },
   "firestore": {
@@ -179,6 +193,10 @@
     "ai_tools/{toolId}/comments": {
       "schema": "Comment",
       "description": "Sub-collection of comments for a specific tool"
+    },
+    "ai_tools/{toolId}/voice_comments": {
+      "schema": "VoiceComment",
+      "description": "Sub-collection of voice reviews and comments for a specific tool"
     },
     "clicks": {
       "schema": "ClickLog",

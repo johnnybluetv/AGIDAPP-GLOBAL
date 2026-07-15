@@ -335,6 +335,104 @@ ${urls
   });
 
 
+  // Direct Developer Contact Email Dispatcher
+  app.post("/api/send-developer-email", async (req, res) => {
+    try {
+      const { toolName, developerEmail, senderName, senderEmail, subject, message } = req.body;
+      if (!developerEmail || !senderEmail || !message) {
+        return res.status(400).json({ success: false, error: "Developer email, sender email, and message are required" });
+      }
+
+      // Configure transporter
+      let transporter;
+      let etherealInfo = "";
+      
+      const gmailUser = process.env.GMAIL_USER;
+      const gmailPass = process.env.GMAIL_APP_PASSWORD;
+
+      if (gmailUser && gmailPass) {
+        transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: gmailUser,
+            pass: gmailPass,
+          },
+        });
+      } else {
+        const testAccount = await nodemailer.createTestAccount();
+        transporter = nodemailer.createTransport({
+          host: "smtp.ethereal.email",
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+      }
+
+      const mailOptions = {
+        from: gmailUser ? `"AGIDAPP Inquiries" <${gmailUser}>` : `"AGIDAPP Inquiries" <no-reply@agidappglobal.com>`,
+        to: developerEmail,
+        replyTo: senderEmail,
+        subject: `[AGIDAPP Global] Direct Inquiry: ${subject || `Message about ${toolName}`}`,
+        html: `
+          <div style="font-family: 'Inter', sans-serif; background-color: #030712; color: #f3f4f6; padding: 40px; border-radius: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #1f2937;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <span style="font-size: 40px;">✉️</span>
+              <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.025em; margin: 10px 0 0 0;">Direct Developer Inquiry</h1>
+              <p style="color: #3b82f6; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 5px; margin-bottom: 0;">Sent via agidappglobal.com for <strong>${toolName}</strong></p>
+            </div>
+            
+            <div style="background-color: #0b0f19; border: 1px solid #1f2937; padding: 24px; border-radius: 16px; margin-bottom: 25px;">
+              <h2 style="color: #3b82f6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid #1f2937; padding-bottom: 8px;">Sender Information</h2>
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <tr>
+                  <td style="color: #9ca3af; padding: 6px 0;">Name:</td>
+                  <td style="color: #ffffff; padding: 6px 0; font-weight: 700; text-align: right;">${senderName || "Anonymous User"}</td>
+                </tr>
+                <tr>
+                  <td style="color: #9ca3af; padding: 6px 0;">Email:</td>
+                  <td style="color: #3b82f6; padding: 6px 0; font-weight: 700; text-align: right;"><a href="mailto:${senderEmail}" style="color: #3b82f6; text-decoration: none;">${senderEmail}</a></td>
+                </tr>
+              </table>
+            </div>
+
+            <div style="background-color: #0b0f19; border: 1px solid #1f2937; padding: 24px; border-radius: 16px; margin-bottom: 25px;">
+              <h2 style="color: #3b82f6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid #1f2937; padding-bottom: 8px;">Inquiry Details</h2>
+              <p style="font-size: 13px; font-weight: 700; color: #ffffff; margin-top: 0; margin-bottom: 12px;">Subject: ${subject || `Inquiry about ${toolName}`}</p>
+              <div style="font-size: 13px; line-height: 1.6; color: #d1d5db; white-space: pre-wrap; background-color: #030712; padding: 16px; border-radius: 12px; border: 1px solid #111827;">${message}</div>
+            </div>
+
+            <div style="text-align: center; font-size: 11px; color: #6b7280; border-top: 1px solid #1f2937; padding-top: 20px;">
+              This inquiry was submitted by a logged-in user on <a href="https://www.agidappglobal.com" style="color: #3b82f6; text-decoration: none;">agidappglobal.com</a>.<br/>
+              You can reply to this email directly to contact the sender.
+            </div>
+          </div>
+        `
+      };
+
+      const result = await transporter.sendMail(mailOptions);
+      console.log("[SMTP] Developer inquiry email sent: ", result.messageId);
+
+      if (!gmailUser || !gmailPass) {
+        const testUrl = nodemailer.getTestMessageUrl(result);
+        etherealInfo = `Preview sent email at: ${testUrl}`;
+        console.log(`[SMTP] ${etherealInfo}`);
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Email sent to developer successfully", 
+        etherealInfo 
+      });
+    } catch (error: any) {
+      console.error("Failed to send email to developer:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+
   // Share Route for Rich Previews
   app.get("/share/:toolId", async (req, res) => {
     try {

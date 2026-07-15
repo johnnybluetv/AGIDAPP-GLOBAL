@@ -129,6 +129,17 @@ service cloud.firestore {
         allow delete: if request.auth != null && (request.auth.uid == existing().userId || isAdmin());
         allow update: if false;
       }
+
+      match /voice_comments/{voiceCommentId} {
+        allow read: if true;
+        allow create: if request.auth != null && 
+                        incoming().userId == request.auth.uid &&
+                        incoming().voiceBase64 is string &&
+                        incoming().duration is int &&
+                        incoming().createdAt == request.time;
+        allow delete: if request.auth != null && (request.auth.uid == existing().userId || isAdmin());
+        allow update: if false;
+      }
     }
 
     match /admins/{adminId} {

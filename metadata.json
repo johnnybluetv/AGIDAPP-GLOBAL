@@ -1,6 +1,6 @@
 {
   "name": "Agidapp Global",
   "description": "A comprehensive, live-updating catalog for AI tools, software, web apps, platforms, and APKs.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
