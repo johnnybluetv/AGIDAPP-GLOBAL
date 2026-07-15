@@ -18,6 +18,8 @@ import Onboarding from "./components/Onboarding";
 import SoundActivationModal from "./components/SoundActivationModal";
 import LogoSnowfall from "./components/LogoSnowfall";
 import UserWaterfall from "./components/UserWaterfall";
+import { translations, Language } from "./lib/translations";
+import ToolRecommender from "./components/ToolRecommender";
 import StatsDashboard from "./components/StatsDashboard";
 import VoiceSearch from "./components/VoiceSearch";
 import DriveDashboard from "./components/DriveDashboard";
@@ -76,6 +78,27 @@ export default function App() {
   // Compare Mode State
   const [comparedTools, setComparedTools] = React.useState<AiTool[]>([]);
   const [showComparisonModal, setShowComparisonModal] = React.useState(false);
+
+  // Language State
+  const [language, setLanguage] = React.useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem("agid_lang") as Language;
+      if (saved === "en" || saved === "es" || saved === "fr" || saved === "de") return saved;
+    } catch {}
+    return "en";
+  });
+
+  const handleLanguageChange = (lang: Language) => {
+    setLanguage(lang);
+    try {
+      localStorage.setItem("agid_lang", lang);
+    } catch {}
+  };
+
+  const t = translations[language];
+
+  // Confirmation Modal States
+  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = React.useState(false);
 
   const toggleCompareTool = (tool: AiTool) => {
     setComparedTools(prev => {
@@ -355,8 +378,43 @@ export default function App() {
 
   const clearRecentSearches = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
+    setShowClearHistoryConfirm(true);
+  };
+
+  const handleConfirmClearRecentSearches = () => {
     setRecentSearches([]);
     localStorage.removeItem("agid_recent_searches");
+    setShowClearHistoryConfirm(false);
+  };
+
+  const handleToggleFavorite = async (tool: AiTool) => {
+    if (!user) {
+      await login();
+      return;
+    }
+
+    const favDocRef = doc(db, "users", user.uid, "favorites", tool.id);
+    try {
+      if (favorites.includes(tool.id)) {
+        await deleteDoc(favDocRef);
+      } else {
+        await setDoc(favDocRef, {
+          toolId: tool.id,
+          createdAt: serverTimestamp()
+        });
+        
+        const activityRef = doc(collection(db, "users", user.uid, "activity"));
+        await setDoc(activityRef, {
+          type: "favorite",
+          targetId: tool.id,
+          targetName: tool.name,
+          timestamp: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}/favorites/${tool.id}`);
+    }
   };
 
   const handleSelectRecentSearch = (queryStr: string) => {
@@ -493,16 +551,55 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // Update user profile in Firestore
+  // Update user profile in Firestore and send signup email notifications
   React.useEffect(() => {
     if (user) {
       const userRef = doc(db, "users", user.uid);
-      setDoc(userRef, {
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        email: user.email,
-        lastSeen: serverTimestamp()
-      }, { merge: true });
+      getDoc(userRef)
+        .then((snapshot) => {
+          const isNewUser = !snapshot.exists();
+          const profileData: any = {
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            email: user.email,
+            lastSeen: serverTimestamp()
+          };
+
+          if (isNewUser) {
+            profileData.createdAt = serverTimestamp();
+          }
+
+          setDoc(userRef, profileData, { merge: true })
+            .then(() => {
+              if (isNewUser) {
+                console.log("[Auth] First-time signup detected! Dispatching notifications...");
+                fetch("/api/notify-signup", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName || "New User"
+                  })
+                })
+                .then((res) => res.json())
+                .then((data) => {
+                  console.log("[Auth] Signup notification success:", data);
+                })
+                .catch((err) => {
+                  console.error("[Auth] Signup notification API call failed:", err);
+                });
+              }
+            })
+            .catch((err) => {
+              console.error("[Auth] Failed to set user document:", err);
+            });
+        })
+        .catch((err) => {
+          console.error("[Auth] Failed to fetch user profile:", err);
+        });
     }
   }, [user]);
 
@@ -1324,6 +1421,24 @@ export default function App() {
               <Zap className={`w-4 h-4 ${isScraping ? 'animate-pulse text-blue-400' : 'text-blue-500'}`} />
               {isScraping ? 'INDEXING_CORE_MODELS...' : 'Index Popular AIs'}
             </button>
+
+            {/* Language Switcher Quick-Toggle */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                const langs: Language[] = ["en", "es", "fr", "de"];
+                const idx = langs.indexOf(language);
+                const nextLang = langs[(idx + 1) % langs.length];
+                handleLanguageChange(nextLang);
+              }}
+              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-all flex items-center gap-1.5 shadow-lg group cursor-pointer"
+              title="Toggle Language / Cambiar Idioma"
+            >
+              <Globe className="w-4 h-4 text-blue-400 group-hover:rotate-12 transition-transform duration-300" />
+              <span className="uppercase text-[10px] font-black">{language}</span>
+            </motion.button>
+
             {/* Persistent Settings Panel */}
             <div className="relative">
               <motion.button
@@ -1395,6 +1510,30 @@ export default function App() {
                           <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide leading-relaxed">
                             Play soundscapes on every interface click & interactive action.
                           </p>
+                        </div>
+
+                        {/* Display Language Section */}
+                        <div className="pt-2 border-t border-slate-800 flex flex-col gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                            <Globe className="w-4 h-4 text-blue-400" />
+                            Display Language
+                          </span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {(["en", "es", "fr", "de"] as Language[]).map((lang) => (
+                              <button
+                                key={lang}
+                                type="button"
+                                onClick={() => handleLanguageChange(lang)}
+                                className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer ${
+                                  language === lang
+                                    ? "bg-blue-600/20 text-blue-400 border border-blue-500/30 font-black"
+                                    : "bg-slate-900/40 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white"
+                                }`}
+                              >
+                                {lang === "en" ? "English" : lang === "es" ? "Español" : lang === "fr" ? "Français" : "Deutsch"}
+                              </button>
+                            ))}
+                          </div>
                         </div>
 
                         {/* Test Soundscape Button */}
@@ -1510,13 +1649,21 @@ export default function App() {
               <BlazingFire />
 
               <span className="px-4 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-full border border-blue-500/20 mb-6 inline-block">
-                The Definitive AI Roadmap
+                {language === "en" ? "The Definitive AI Roadmap" : language === "es" ? "La Ruta Definitiva de IA" : language === "fr" ? "La Feuille de Route IA Définitive" : "Der definitive KI-Wegweiser"}
               </span>
               <h2 className="text-5xl md:text-7xl font-black text-white mb-8 tracking-tight">
-                Discover the <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Infinite</span> <br/> AI Landscape.
+                {language === "en" ? (
+                  <>Discover the <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Infinite</span> <br/> AI Landscape.</>
+                ) : language === "es" ? (
+                  <>Descubre el <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Infinito</span> <br/> Panorama de IA.</>
+                ) : language === "fr" ? (
+                  <>Découvrez le <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Paysage IA</span> <br/> Infini.</>
+                ) : (
+                  <>Entdecken Sie die <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Unendliche</span> <br/> KI-Landschaft.</>
+                )}
               </h2>
               <p className="max-w-2xl mx-auto text-lg text-slate-400 mb-12">
-                Agidapp Global is the world's most comprehensive catalog for artificial intelligence. From LLMs to edge-computing APKs, explore tools that shape the future.
+                {t.heroSubtitle}
               </p>
 
               <div className="flex flex-wrap justify-center gap-4 mb-16">
@@ -1646,7 +1793,7 @@ export default function App() {
                     aria-controls="search-suggestions"
                     aria-haspopup="listbox"
                     aria-label="Search by name, category, or functionality"
-                    placeholder="Ask for ChatGPT, Midjourney, or SDKs..."
+                    placeholder={t.searchPlaceholder}
                     className="w-full bg-transparent border-none px-14 py-4 text-slate-950 focus:outline-none placeholder:text-slate-800/60 font-bold relative z-10"
                     value={searchQuery}
                     onChange={(e) => handleSearchChange(e.target.value)}
@@ -1687,13 +1834,13 @@ export default function App() {
                         <div className="p-3 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 flex justify-between items-center bg-slate-900/50">
                           <span className="flex items-center gap-1.5">
                             <History className="w-3.5 h-3.5 text-blue-400" />
-                            Recent Tool Queries
+                            {t.recentQueries}
                           </span>
                           <button
                             onMouseDown={(e) => clearRecentSearches(e)}
                             className="text-[9px] bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 px-2 py-0.5 rounded-full font-bold transition-all cursor-pointer"
                           >
-                            Clear History
+                            {t.clearHistory}
                           </button>
                         </div>
                         <div className="py-1">
@@ -2146,6 +2293,21 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        {/* AI Tool Recommendation Assistant Section */}
+        {!loading && (
+          <section className="py-8 max-w-7xl mx-auto px-6">
+            <ToolRecommender
+              allTools={tools}
+              favorites={favorites}
+              comparedTools={comparedTools}
+              onCompareToggle={toggleCompareTool}
+              onView={(tool) => setSelectedTool(tool)}
+              onFavoriteToggle={handleToggleFavorite}
+              t={t}
+            />
+          </section>
+        )}
 
         {/* Featured Section */}
         {!loading && !searchQuery && selectedCategory === "All" && selectedType === "All" && !showFavoritesOnly && featuredTools.length > 0 && (
@@ -3002,21 +3164,63 @@ export default function App() {
               <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
                 <Trash2 className="w-8 h-8 text-red-500" />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Delete `{toolToDelete.name}`?</h3>
-              <p className="text-slate-400 mb-8">This action is permanent and will remove the tool from the global directory for all users.</p>
+              <h3 className="text-2xl font-bold text-white mb-2">{t.deleteConfirmTitle}</h3>
+              <p className="text-slate-400 mb-8">{t.deleteConfirmDesc} ({toolToDelete.name})</p>
               
               <div className="flex w-full gap-4">
                 <button 
                   onClick={() => setToolToDelete(null)}
                   className="flex-1 px-6 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-750 transition-all"
                 >
-                  Cancel
+                  {t.cancel}
                 </button>
                 <button 
                   onClick={() => handleDeleteTool(toolToDelete.id)}
                   className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-500 transition-all shadow-lg shadow-red-600/20"
                 >
-                  Delete
+                  {t.delete}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Clear Search History Confirmation Modal */}
+      <AnimatePresence>
+        {showClearHistoryConfirm && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowClearHistoryConfirm(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center"
+            >
+              <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mb-6">
+                <History className="w-8 h-8 text-orange-500" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">{t.clearHistoryConfirmTitle}</h3>
+              <p className="text-slate-400 mb-8">{t.clearHistoryConfirmDesc}</p>
+              
+              <div className="flex w-full gap-4">
+                <button 
+                  onClick={() => setShowClearHistoryConfirm(false)}
+                  className="flex-1 px-6 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-750 transition-all"
+                >
+                  {t.cancel}
+                </button>
+                <button 
+                  onClick={handleConfirmClearRecentSearches}
+                  className="flex-1 px-6 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-500 transition-all shadow-lg shadow-orange-600/20"
+                >
+                  {t.clearHistoryConfirmButton}
                 </button>
               </div>
             </motion.div>

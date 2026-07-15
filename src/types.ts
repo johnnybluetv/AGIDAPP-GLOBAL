@@ -19,6 +19,13 @@ export interface AiTool {
   totalRatingsCount?: number;
   visitCount?: number;
   mediaFiles?: { url: string; type: 'image' | 'video' | 'document'; name: string }[];
+  // Technical Metadata Fields
+  license?: string;
+  integrations?: string[];
+  apiAvailable?: boolean;
+  deployment?: string;
+  framework?: string;
+  pricing?: string;
   // Social links
   instagram?: string;
   tiktok?: string;

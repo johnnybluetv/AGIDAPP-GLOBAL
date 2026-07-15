@@ -5,6 +5,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, query, where, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
+import nodemailer from "nodemailer";
 
 // Load Firebase Config
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
@@ -130,7 +131,7 @@ ${urls
   // Google AdSense Authorization Route
   app.get("/ads.txt", (req, res) => {
     res.set("Content-Type", "text/plain");
-    res.send("google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0");
+    res.send("google.com, pub-7039003478830210, DIRECT, f08c47fec0942fa0");
   });
 
   // Dynamic SEO Search Engine Sitemap Ping Endpoint
@@ -164,6 +165,175 @@ ${urls
       res.status(500).json({ success: false, error: error.message });
     }
   });
+
+  // New User Signup Notification & Welcome Email Dispatcher
+  app.post("/api/notify-signup", async (req, res) => {
+    try {
+      const { uid, email, displayName } = req.body;
+      if (!email) {
+        return res.status(400).json({ success: false, error: "Email is required" });
+      }
+
+      const adminEmail = "johnnyblueagency@gmail.com";
+      const userName = displayName || "New User";
+
+      // Configure transporter
+      let transporter;
+      let etherealInfo = "";
+      
+      const gmailUser = process.env.GMAIL_USER;
+      const gmailPass = process.env.GMAIL_APP_PASSWORD;
+
+      if (gmailUser && gmailPass) {
+        console.log("[SMTP] Using configured custom Gmail transport.");
+        transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: gmailUser,
+            pass: gmailPass,
+          },
+        });
+      } else {
+        console.log("[SMTP] No custom Gmail credentials. Creating automatic sandbox/test account via Ethereal...");
+        const testAccount = await nodemailer.createTestAccount();
+        transporter = nodemailer.createTransport({
+          host: "smtp.ethereal.email",
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+      }
+
+      // 1. Email to Admin (Notification)
+      const adminMailOptions = {
+        from: gmailUser ? `"AGIDAPP Notifications" <${gmailUser}>` : `"AGIDAPP Sandbox" <no-reply@agidappglobal.com>`,
+        to: adminEmail,
+        subject: `🚀 New User Signup: ${userName} on AGIDAPP Global!`,
+        html: `
+          <div style="font-family: 'Inter', sans-serif; background-color: #030712; color: #f3f4f6; padding: 40px; border-radius: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #1f2937;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <span style="font-size: 40px;">🚀</span>
+              <h1 style="color: #ffffff; font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.025em; margin: 10px 0 0 0;">New User Signup Notification</h1>
+              <p style="color: #9ca3af; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 5px;">Agidapp Global Platform Admin Alert</p>
+            </div>
+            
+            <div style="background-color: #0b0f19; border: 1px solid #1f2937; padding: 24px; border-radius: 16px; margin-bottom: 30px;">
+              <h2 style="color: #3b82f6; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0; margin-bottom: 16px;">User Details</h2>
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <tr>
+                  <td style="color: #9ca3af; padding: 8px 0; border-bottom: 1px solid #1f2937; font-weight: 500;">Display Name:</td>
+                  <td style="color: #ffffff; padding: 8px 0; border-bottom: 1px solid #1f2937; font-weight: 700; text-align: right;">${userName}</td>
+                </tr>
+                <tr>
+                  <td style="color: #9ca3af; padding: 8px 0; border-bottom: 1px solid #1f2937; font-weight: 500;">Email Address:</td>
+                  <td style="color: #3b82f6; padding: 8px 0; border-bottom: 1px solid #1f2937; font-weight: 700; text-align: right;"><a href="mailto:${email}" style="color: #3b82f6; text-decoration: none;">${email}</a></td>
+                </tr>
+                <tr>
+                  <td style="color: #9ca3af; padding: 8px 0; border-bottom: 1px solid #1f2937; font-weight: 500;">User UID:</td>
+                  <td style="color: #f3f4f6; padding: 8px 0; border-bottom: 1px solid #1f2937; font-family: monospace; font-size: 11px; text-align: right;">${uid}</td>
+                </tr>
+                <tr>
+                  <td style="color: #9ca3af; padding: 8px 0; font-weight: 500;">Signup Time:</td>
+                  <td style="color: #ffffff; padding: 8px 0; font-weight: 700; text-align: right;">${new Date().toLocaleString()}</td>
+                </tr>
+              </table>
+            </div>
+
+            <div style="text-align: center; font-size: 11px; color: #6b7280; border-top: 1px solid #1f2937; padding-top: 20px;">
+              This is an automated operational alert generated by agidappglobal.com.
+            </div>
+          </div>
+        `
+      };
+
+      // 2. Email to User (Welcome Message)
+      const userMailOptions = {
+        from: gmailUser ? `"AGIDAPP Global" <${gmailUser}>` : `"AGIDAPP Global" <no-reply@agidappglobal.com>`,
+        to: email,
+        subject: `Welcome to AGIDAPP Global - The Best AI & AGI Tools Directory on the Globe! 🌍`,
+        html: `
+          <div style="font-family: 'Inter', sans-serif; background-color: #030712; color: #f3f4f6; padding: 40px; border-radius: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #1f2937;">
+            <div style="text-align: center; margin-bottom: 35px;">
+              <div style="display: inline-block; background-color: #3b82f6; color: white; width: 60px; height: 60px; line-height: 60px; border-radius: 50%; font-size: 28px; margin-bottom: 15px;">🌍</div>
+              <h1 style="color: #ffffff; font-size: 26px; font-weight: 900; tracking-tight: -0.03em; margin: 0;">Welcome to AGIDAPP Global!</h1>
+              <p style="color: #3b82f6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; margin-top: 6px; margin-bottom: 0;">The Premier AI & AGI Tools Directory</p>
+            </div>
+
+            <p style="font-size: 14px; line-height: 1.6; color: #d1d5db; margin-bottom: 25px;">
+              Hi <strong>${userName}</strong>,
+            </p>
+
+            <p style="font-size: 14px; line-height: 1.6; color: #d1d5db; margin-bottom: 25px;">
+              Thank you for signing up and joining our global community of digital innovators, developers, and AI builders.
+            </p>
+
+            <div style="background-color: #0b0f19; border: 1px solid #1f2937; padding: 24px; border-radius: 16px; margin-bottom: 30px;">
+              <h2 style="color: #ffffff; font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #1f2937; padding-bottom: 8px;">Why agidappglobal.com is the best on the globe:</h2>
+              
+              <div style="margin-bottom: 18px;">
+                <h3 style="color: #3b82f6; font-size: 13px; font-weight: 700; margin: 0 0 4px 0;">🚀 Comprehensive & Live Directory</h3>
+                <p style="color: #9ca3af; font-size: 12px; margin: 0; line-height: 1.5;">We index the most revolutionary AI and AGI platforms, web clients, native tools, and direct-to-download APK packages. Complete with Google-aligned dynamic SEO sitemaps for maximum search discoverability.</p>
+              </div>
+
+              <div style="margin-bottom: 18px;">
+                <h3 style="color: #3b82f6; font-size: 13px; font-weight: 700; margin: 0 0 4px 0;">📊 Specifications & Deep Specs</h3>
+                <p style="color: #9ca3af; font-size: 12px; margin: 0; line-height: 1.5;">Every product lists detailed software licenses, api integrations, hosting environments, price modules, upvote rates, and official App Store and Google Play store user reviews.</p>
+              </div>
+
+              <div style="margin-bottom: 18px;">
+                <h3 style="color: #3b82f6; font-size: 13px; font-weight: 700; margin: 0 0 4px 0;">🎬 Interactive Video Spotlights</h3>
+                <p style="color: #9ca3af; font-size: 12px; margin: 0; line-height: 1.5;">Watch and play high-definition YouTube promotional video clips directly within each software card for immediate proof of utility.</p>
+              </div>
+
+              <div>
+                <h3 style="color: #3b82f6; font-size: 13px; font-weight: 700; margin: 0 0 4px 0;">🔔 Highly Social & Interactive</h3>
+                <p style="color: #9ca3af; font-size: 12px; margin: 0; line-height: 1.5;">Build curated public projects, create customized bookmark folders, write community comments, and listen to dynamic, custom click soundscapes in real-time.</p>
+              </div>
+            </div>
+
+            <div style="text-align: center; margin-bottom: 30px;">
+              <a href="https://www.agidappglobal.com" style="display: inline-block; background-color: #3b82f6; color: #ffffff; text-decoration: none; padding: 12px 28px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 12px; transition: all 0.3s; box-shadow: 0 4px 15px rgba(59,130,246,0.3);">
+                Explore AGIDAPP Global Now
+              </a>
+            </div>
+
+            <p style="font-size: 12px; line-height: 1.6; color: #9ca3af; margin-bottom: 0; border-top: 1px solid #1f2937; padding-top: 20px; text-align: center;">
+              See you on the platform,<br/>
+              <strong>The AGIDAPP Global Team</strong><br/>
+              <span style="color: #6b7280; font-size: 10px;">agidappglobal.com</span>
+            </p>
+          </div>
+        `
+      };
+
+      // Send both
+      const adminResult = await transporter.sendMail(adminMailOptions);
+      const userResult = await transporter.sendMail(userMailOptions);
+
+      console.log("[SMTP] Email to admin sent: ", adminResult.messageId);
+      console.log("[SMTP] Email to user sent: ", userResult.messageId);
+
+      if (!gmailUser || !gmailPass) {
+        const testAdminUrl = nodemailer.getTestMessageUrl(adminResult);
+        const testUserUrl = nodemailer.getTestMessageUrl(userResult);
+        etherealInfo = `Admin Email Preview: ${testAdminUrl} | User Email Preview: ${testUserUrl}`;
+        console.log(`[SMTP] ${etherealInfo}`);
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Emails dispatched successfully", 
+        etherealInfo 
+      });
+    } catch (error: any) {
+      console.error("Failed to process signup notification / emails:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
 
   // Share Route for Rich Previews
   app.get("/share/:toolId", async (req, res) => {
