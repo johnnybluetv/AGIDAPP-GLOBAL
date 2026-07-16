@@ -200,8 +200,11 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
   const [commentsCount, setCommentsCount] = React.useState<number>(0);
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [shareSuccess, setShareSuccess] = React.useState<"idle" | "shared" | "copied">("idle");
   const [linkCopied, setLinkCopied] = React.useState(false);
   const [shareCopied, setShareCopied] = React.useState(false);
+  const [modalCopied, setModalCopied] = React.useState(false);
+  const [modalUrlType, setModalUrlType] = React.useState<"share" | "direct">("share");
   const [showDetails, setShowDetails] = React.useState(false);
   const [showStoreReviews, setShowStoreReviews] = React.useState(false);
   const [showYoutubeModal, setShowYoutubeModal] = React.useState(false);
@@ -739,30 +742,19 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
             </button>
 
             <div className="flex items-center gap-2">
-              <Tooltip text={copied ? "Copied!" : "Copy Share Link"}>
+              <Tooltip text="Share Tool (Social & Native Platforms)">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
-                    try {
-                      const shareUrl = `https://www.agidappglobal.com/share/${tool.id}`;
-                      await navigator.clipboard.writeText(shareUrl);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    } catch (err) {
-                      console.error("Failed to copy link", err);
-                    }
+                    setIsShareModalOpen(true);
                   }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all shadow-md ${
-                    copied 
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-emerald-950/20" 
-                    : "bg-slate-800 text-slate-300 border-slate-750 hover:text-white hover:border-slate-600 hover:bg-slate-750"
-                  }`}
-                  aria-label="Copy tool share link"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all shadow-md bg-slate-800 text-slate-300 border-slate-750 hover:text-white hover:border-slate-600 hover:bg-slate-750"
+                  aria-label="Open sharing modal"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5 text-blue-400" />}
-                  <span>{copied ? "Copied" : "Copy"}</span>
+                  <Share2 className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                  <span>Share</span>
                 </motion.button>
               </Tooltip>
 
@@ -1434,24 +1426,91 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
                 ))}
               </div>
 
-              <div className="p-6 bg-slate-950/50 border-t border-white/5">
+              <div className="p-6 bg-slate-950/50 border-t border-white/5 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Link Type:</span>
+                  <div className="flex gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                    <button
+                      onClick={() => {
+                        setModalUrlType("share");
+                        setModalCopied(false);
+                      }}
+                      className={`px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-md transition-all ${
+                        modalUrlType === "share"
+                          ? "bg-blue-600 text-white shadow-md"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Agidapp Share Link
+                    </button>
+                    <button
+                      onClick={() => {
+                        setModalUrlType("direct");
+                        setModalCopied(false);
+                      }}
+                      className={`px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-md transition-all ${
+                        modalUrlType === "direct"
+                          ? "bg-blue-600 text-white shadow-md"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Direct Tool URL
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2 p-3 bg-slate-900 border border-white/5 rounded-xl">
-                  <Link2 className="w-4 h-4 text-slate-500" />
+                  <Link2 className="w-4 h-4 text-slate-500 flex-shrink-0" />
                   <input 
                     readOnly 
-                    value={tool.url}
-                    className="bg-transparent border-none text-[10px] text-slate-400 flex-1 focus:ring-0 font-mono"
+                    value={modalUrlType === "share" ? `https://www.agidappglobal.com/share/${tool.id}` : tool.url}
+                    className="bg-transparent border-none text-[10px] text-slate-400 flex-1 focus:ring-0 font-mono focus:outline-none select-all overflow-x-auto"
                   />
                   <button 
-                    onClick={() => {
-                      onShare();
-                      setIsShareModalOpen(false);
+                    onClick={async () => {
+                      const shareUrl = modalUrlType === "share" ? `https://www.agidappglobal.com/share/${tool.id}` : tool.url;
+                      try {
+                        await navigator.clipboard.writeText(shareUrl);
+                        setModalCopied(true);
+                        onShare();
+                        setTimeout(() => setModalCopied(false), 2000);
+                      } catch (err) {
+                        console.error("[Share Modal] Failed to copy link:", err);
+                      }
                     }}
-                    className="px-4 py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20"
+                    className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all shadow-lg flex items-center gap-1 ${
+                      modalCopied
+                        ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                        : "bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/20"
+                    }`}
                   >
-                    Copy
+                    {modalCopied ? <Check className="w-3.5 h-3.5" /> : null}
+                    {modalCopied ? "Copied" : "Copy"}
                   </button>
                 </div>
+
+                {navigator.share && (
+                  <button
+                    onClick={async () => {
+                      const shareUrl = `https://www.agidappglobal.com/share/${tool.id}`;
+                      try {
+                        await navigator.share({
+                          title: tool.name,
+                          text: tool.desc || `Check out ${tool.name} on Agidapp Global!`,
+                          url: shareUrl,
+                        });
+                        onShare();
+                        setIsShareModalOpen(false);
+                      } catch (err) {
+                        console.warn("[Share Modal] Native share dismissed or failed:", err);
+                      }
+                    }}
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                  >
+                    <Share2 className="w-4 h-4 text-blue-400" />
+                    <span>Open Native Device Share</span>
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
