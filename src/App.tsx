@@ -9,6 +9,8 @@ import { Sparkles, Palette, Code2, Box, Video as VideoIcon } from "lucide-react"
 import SkeletonCard from "./components/SkeletonCard";
 import SubmitForm from "./components/SubmitForm";
 import UserProfile from "./components/UserProfile";
+import SocialFeed from "./components/SocialFeed";
+import { Radio } from "lucide-react";
 import AdminPortal from "./components/AdminPortal";
 import CommentSection from "./components/CommentSection";
 import RelatedTools from "./components/RelatedTools";
@@ -31,8 +33,10 @@ import { deleteDoc, doc, updateDoc, setDoc, increment, addDoc, serverTimestamp, 
 import { useAuth } from "./context/AuthContext";
 import { Helmet } from "react-helmet-async";
 import Fuse from "fuse.js";
+import { useWebVitals } from "./hooks/useWebVitals";
 
 export default function App() {
+  useWebVitals();
   const { user, login } = useAuth();
   const [tools, setTools] = React.useState<AiTool[]>([]);
   const [favorites, setFavorites] = React.useState<string[]>([]);
@@ -74,6 +78,7 @@ export default function App() {
   const [showWaterfallMobile, setShowWaterfallMobile] = React.useState(false);
   const [showInsights, setShowInsights] = React.useState(false);
   const [showDrive, setShowDrive] = React.useState(false);
+  const [showSocialFeed, setShowSocialFeed] = React.useState(false);
 
   // Compare Mode State
   const [comparedTools, setComparedTools] = React.useState<AiTool[]>([]);
@@ -594,11 +599,41 @@ export default function App() {
               }
             })
             .catch((err) => {
-              console.error("[Auth] Failed to set user document:", err);
+              const errStr = String(err).toLowerCase();
+              const isOffline = !navigator.onLine || 
+                                errStr.includes("offline") || 
+                                errStr.includes("unavailable") || 
+                                err?.message?.toLowerCase().includes("offline") || 
+                                err?.code === "unavailable";
+              if (isOffline) {
+                console.warn("[Auth] Client is offline. Failed to write user document, but operation will be retried automatically by Firestore.");
+              } else {
+                console.warn("[Auth] Failed to set user document:", err);
+              }
             });
         })
         .catch((err) => {
-          console.error("[Auth] Failed to fetch user profile:", err);
+          const errStr = String(err).toLowerCase();
+          const isOffline = !navigator.onLine || 
+                            errStr.includes("offline") || 
+                            errStr.includes("unavailable") || 
+                            err?.message?.toLowerCase().includes("offline") || 
+                            err?.code === "unavailable";
+          if (isOffline) {
+            console.warn("[Auth] Client is offline. Postponing user profile fetch; Firestore will handle synchronization automatically.");
+            // Offline fallback: try to write standard client profile metadata since Firestore allows offline setDoc
+            const profileData: any = {
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              email: user.email,
+              lastSeen: serverTimestamp()
+            };
+            setDoc(userRef, profileData, { merge: true }).catch((setErr) => {
+              console.warn("[Auth] Offline setDoc profile sync queued:", setErr);
+            });
+          } else {
+            console.warn("[Auth] Failed to fetch user profile:", err);
+          }
         });
     }
   }, [user]);
@@ -723,6 +758,43 @@ export default function App() {
       });
       setIsEditing(false);
       setSelectedTool(prev => prev ? { ...prev, ...editFormData, updatedAt: new Date() } : null);
+
+      // Add event to public global social feed
+      try {
+        await addDoc(collection(db, "social_feed"), {
+          type: "tool_update_alert",
+          toolId: selectedTool.id,
+          toolName: editFormData.name,
+          timestamp: serverTimestamp(),
+          details: "Administrator updated details & categories"
+        });
+      } catch (err) {
+        console.error("Failed to log update to social feed:", err);
+      }
+
+      // Notify subscribed users about the tool update
+      fetch("/api/notify-subscribers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          toolId: selectedTool.id,
+          name: editFormData.name,
+          category: editFormData.category,
+          type: editFormData.type,
+          url: editFormData.url,
+          desc: editFormData.desc,
+          apk: editFormData.apk
+        })
+      }).then(res => res.json())
+        .then(data => {
+          console.log("[Subscription Notification] Result: ", data);
+        })
+        .catch(err => {
+          console.error("[Subscription Notification] Failed to send update alert: ", err);
+        });
+
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `ai_tools/${selectedTool.id}`);
     }
@@ -1075,6 +1147,8 @@ export default function App() {
         <meta name="keywords" content="AGI, LLM, AI Directory, Machine Learning, AI tools, Artificial General Intelligence, Agidapp, Neural Networks, Deep Learning, AI Directory App" />
         <link rel="canonical" href={selectedTool ? `https://www.agidappglobal.com/share/${selectedTool.id}` : "https://www.agidappglobal.com/"} />
         <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+        <meta name="google-adsense-account" content="ca-pub-7039003478830210" />
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7039003478830210" crossOrigin="anonymous"></script>
         {import.meta.env.VITE_GOOGLE_SITE_VERIFICATION && (
           <meta name="google-site-verification" content={import.meta.env.VITE_GOOGLE_SITE_VERIFICATION} />
         )}
@@ -1118,6 +1192,58 @@ export default function App() {
           )}
         </script>
 
+        {/* Dynamic Breadcrumb List Schema */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": selectedTool
+              ? [
+                  {
+                    "@type": "ListItem",
+                    "position": 1,
+                    "name": "Home",
+                    "item": "https://www.agidappglobal.com/"
+                  },
+                  {
+                    "@type": "ListItem",
+                    "position": 2,
+                    "name": selectedTool.category || "AI Tools",
+                    "item": `https://www.agidappglobal.com/?category=${encodeURIComponent(selectedTool.category || "AI Tools")}`
+                  },
+                  {
+                    "@type": "ListItem",
+                    "position": 3,
+                    "name": selectedTool.name,
+                    "item": `https://www.agidappglobal.com/share/${selectedTool.id}`
+                  }
+                ]
+              : selectedCategory && selectedCategory !== "All"
+              ? [
+                  {
+                    "@type": "ListItem",
+                    "position": 1,
+                    "name": "Home",
+                    "item": "https://www.agidappglobal.com/"
+                  },
+                  {
+                    "@type": "ListItem",
+                    "position": 2,
+                    "name": selectedCategory,
+                    "item": `https://www.agidappglobal.com/?category=${encodeURIComponent(selectedCategory)}`
+                  }
+                ]
+              : [
+                  {
+                    "@type": "ListItem",
+                    "position": 1,
+                    "name": "Home",
+                    "item": "https://www.agidappglobal.com/"
+                  }
+                ]
+          })}
+        </script>
+
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="Agidapp Global" />
@@ -1125,6 +1251,10 @@ export default function App() {
         <meta property="og:title" content={selectedTool ? `${selectedTool.name} - Discover on Agidapp Global` : "AGID - Artificial General Intelligence Directory"} />
         <meta property="og:description" content={selectedTool ? selectedTool.desc : "AGIDAPP GLOBAL SOFTWARE Is A comprehensive, live-updating catalog for Ai & AGI tools, software, web apps, platforms, and APKs. Artificial General Intelligence Directory APP(AGIDAPP) Is built for users to discover, compare, and manage trending digital and humanity solutions with Ai & AGI."} />
         <meta property="og:image" content="https://www.agidappglobal.com/logo.png" />
+        <meta property="og:image:width" content="512" />
+        <meta property="og:image:height" content="512" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:alt" content={selectedTool ? `${selectedTool.name} Logo` : "AGID Logo"} />
 
         {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
@@ -1132,6 +1262,9 @@ export default function App() {
         <meta name="twitter:title" content={selectedTool ? `${selectedTool.name} - Discover on Agidapp Global` : "AGID - Artificial General Intelligence Directory"} />
         <meta name="twitter:description" content={selectedTool ? selectedTool.desc : "AGIDAPP GLOBAL SOFTWARE Is A comprehensive, live-updating catalog for Ai & AGI tools, software, web apps, platforms, and APKs. Artificial General Intelligence Directory APP(AGIDAPP) Is built for users to discover, compare, and manage trending digital and humanity solutions with Ai & AGI."} />
         <meta name="twitter:image" content="https://www.agidappglobal.com/logo.png" />
+        <meta name="twitter:image:alt" content={selectedTool ? `${selectedTool.name} Logo` : "AGID Logo"} />
+        <meta name="twitter:site" content="@AgidappGlobal" />
+        <meta name="twitter:creator" content="@AgidappGlobal" />
       </Helmet>
       {/* Waterfall Desktop Lane */}
       <div className="fixed left-0 top-0 bottom-0 w-24 hidden lg:block z-[40]">
@@ -1382,6 +1515,9 @@ export default function App() {
                         src={user.photoURL || null} 
                         alt={user.displayName || ""} 
                         className="w-8 h-8 sm:w-10 h-10 rounded-xl border border-slate-800 shadow-xl group-hover:scale-95 transition-transform"
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
                       />
                       <div className="text-left hidden xs:block">
                         <p className="text-[10px] font-black text-white leading-none uppercase tracking-tighter">Profile</p>
@@ -1421,6 +1557,26 @@ export default function App() {
               <Zap className={`w-4 h-4 ${isScraping ? 'animate-pulse text-blue-400' : 'text-blue-500'}`} />
               {isScraping ? 'INDEXING_CORE_MODELS...' : 'Index Popular AIs'}
             </button>
+
+            {/* Live Social Activity Feed Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowSocialFeed(!showSocialFeed)}
+              className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 shadow-lg group cursor-pointer ${
+                showSocialFeed 
+                ? 'bg-emerald-500 text-white border-emerald-400' 
+                : 'bg-emerald-600/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
+              }`}
+              title="Toggle Live Activity Feed"
+            >
+              <Radio className={`w-4 h-4 ${showSocialFeed ? 'text-white' : 'text-emerald-400'} animate-pulse`} />
+              <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Live Feed</span>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+            </motion.button>
 
             {/* Language Switcher Quick-Toggle */}
             <motion.button
@@ -1925,6 +2081,8 @@ export default function App() {
                                           alt=""
                                           className="w-full h-full object-contain"
                                           referrerPolicy="no-referrer"
+                                          loading="lazy"
+                                          decoding="async"
                                         />
                                       </div>
                                       <div className="flex flex-col">
@@ -1987,6 +2145,8 @@ export default function App() {
                                           alt=""
                                           className="w-full h-full object-contain"
                                           referrerPolicy="no-referrer"
+                                          loading="lazy"
+                                          decoding="async"
                                         />
                                       </div>
                                       <div className="flex-1 min-w-0">
@@ -2656,6 +2816,8 @@ export default function App() {
                       alt=""
                       className="w-full h-full object-contain p-2"
                       referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </div>
                   <div>
@@ -2744,6 +2906,20 @@ export default function App() {
                         <ThumbsUp className="w-4 h-4 text-blue-400" />
                         {selectedTool.upvotes} Upvotes
                       </div>
+                      {tools.filter(t => t.id !== selectedTool.id && (t.category === selectedTool.category || t.tags?.some(tag => selectedTool.tags?.includes(tag)))).length > 0 && (
+                        <button
+                          onClick={() => {
+                            const relatedSection = document.getElementById("related-tools-section");
+                            if (relatedSection) {
+                              relatedSection.scrollIntoView({ behavior: "smooth" });
+                            }
+                          }}
+                          className="px-4 py-2 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 active:scale-95 rounded-xl border border-purple-500/20 text-sm font-bold transition-all flex items-center gap-2 cursor-pointer"
+                        >
+                          <Sparkles className="w-4 h-4 text-purple-400" />
+                          Similar Tools ({tools.filter(t => t.id !== selectedTool.id && (t.category === selectedTool.category || t.tags?.some(tag => selectedTool.tags?.includes(tag)))).length})
+                        </button>
+                      )}
                     </div>
 
                     <div className="space-y-4">
@@ -2774,6 +2950,8 @@ export default function App() {
                                   alt={file.name} 
                                   className="w-full h-full object-cover transition-transform duration-300 group-hover/media:scale-105"
                                   referrerPolicy="no-referrer"
+                                  loading="lazy"
+                                  decoding="async"
                                 />
                               ) : file.type === 'video' ? (
                                 <div className="w-full h-full relative">
@@ -3144,6 +3322,42 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Sliding Social Feed Drawer */}
+      <AnimatePresence>
+        {showSocialFeed && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSocialFeed(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            />
+            
+            {/* Drawer Container */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-md h-full shadow-2xl"
+            >
+              <SocialFeed 
+                onViewTool={(toolId) => {
+                  const toolObj = tools.find(t => t.id === toolId);
+                  if (toolObj) {
+                    setSelectedTool(toolObj);
+                  }
+                  setShowSocialFeed(false);
+                }} 
+                onClose={() => setShowSocialFeed(false)} 
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {toolToDelete && (
@@ -3344,6 +3558,9 @@ export default function App() {
                         src={`https://www.google.com/s2/favicons?sz=64&domain=${new URL(tool.url).hostname}`}
                         alt={tool.name}
                         className="w-6 h-6 object-contain"
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
                         onError={(e) => {
                           e.currentTarget.src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=80&h=80&q=80";
                         }}
@@ -3440,6 +3657,9 @@ export default function App() {
                                     src={`https://www.google.com/s2/favicons?sz=64&domain=${new URL(tool.url).hostname}`}
                                     alt={tool.name}
                                     className="w-6 h-6 object-contain"
+                                    loading="lazy"
+                                    decoding="async"
+                                    referrerPolicy="no-referrer"
                                     onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=80&h=80&q=80"; }}
                                   />
                                 </div>

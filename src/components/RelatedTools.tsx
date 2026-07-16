@@ -24,15 +24,28 @@ export default function RelatedTools({
 }: RelatedToolsProps) {
   const related = React.useMemo(() => {
     return allTools
-      .filter(t => t.category === currentTool.category && t.id !== currentTool.id)
-      .sort((a, b) => b.upvotes - a.upvotes) // Prioritize popular ones in the same category
+      .filter(t => t.id !== currentTool.id)
+      .map(t => {
+        let score = 0;
+        if (t.category === currentTool.category) {
+          score += 10;
+        }
+        if (t.tags && currentTool.tags) {
+          const sharedTags = t.tags.filter(tag => currentTool.tags?.includes(tag));
+          score += sharedTags.length * 5;
+        }
+        return { tool: t, score };
+      })
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score || b.tool.upvotes - a.tool.upvotes)
+      .map(item => item.tool)
       .slice(0, 4);
   }, [currentTool, allTools]);
 
   if (related.length === 0) return null;
 
   return (
-    <div className="mt-16 pt-12 border-t border-slate-800">
+    <div id="related-tools-section" className="mt-16 pt-12 border-t border-slate-800">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">

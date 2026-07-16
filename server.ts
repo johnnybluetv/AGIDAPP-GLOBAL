@@ -82,15 +82,49 @@ async function startServer() {
   app.get("/sitemap.xml", async (req, res) => {
     try {
       const baseUrl = "https://www.agidappglobal.com/";
-      const urls: string[] = [
-        baseUrl, // Homepage with trailing slash explicitly
+      
+      const getIsoDate = (timestamp: any): string => {
+        if (!timestamp) return new Date().toISOString().split("T")[0];
+        if (typeof timestamp.toDate === "function") {
+          try {
+            return timestamp.toDate().toISOString().split("T")[0];
+          } catch (e) {
+            // fallback
+          }
+        }
+        if (timestamp instanceof Date) {
+          return timestamp.toISOString().split("T")[0];
+        }
+        if (typeof timestamp === "string") {
+          return timestamp.split("T")[0];
+        }
+        if (typeof timestamp === "number") {
+          return new Date(timestamp).toISOString().split("T")[0];
+        }
+        return new Date().toISOString().split("T")[0];
+      };
+
+      const urls: { loc: string; lastmod: string; changefreq: string; priority: string }[] = [
+        {
+          loc: baseUrl,
+          lastmod: new Date().toISOString().split("T")[0],
+          changefreq: "daily",
+          priority: "1.0",
+        },
       ];
 
       // Fetch all AI tools dynamically
       try {
         const toolsSnap = await getDocs(collection(db, "ai_tools"));
         toolsSnap.forEach((doc) => {
-          urls.push(`https://www.agidappglobal.com/tool/${doc.id}`);
+          const data = doc.data();
+          const lastmod = getIsoDate(data.updatedAt || data.createdAt);
+          urls.push({
+            loc: `https://www.agidappglobal.com/tool/${doc.id}`,
+            lastmod,
+            changefreq: "weekly",
+            priority: "0.8",
+          });
         });
       } catch (err) {
         console.error("Sitemap Tools Fetch Error:", err);
@@ -100,7 +134,14 @@ async function startServer() {
       try {
         const articlesSnap = await getDocs(collection(db, "articles"));
         articlesSnap.forEach((doc) => {
-          urls.push(`https://www.agidappglobal.com/blog/${doc.id}`);
+          const data = doc.data();
+          const lastmod = getIsoDate(data.updatedAt || data.createdAt);
+          urls.push({
+            loc: `https://www.agidappglobal.com/blog/${doc.id}`,
+            lastmod,
+            changefreq: "weekly",
+            priority: "0.8",
+          });
         });
       } catch (err) {
         console.error("Sitemap Articles Fetch Error:", err);
@@ -110,11 +151,12 @@ async function startServer() {
       const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls
-  .map((url) => {
+  .map((item) => {
     return `  <url>
-    <loc>${url}</loc>
-    <changefreq>daily</changefreq>
-    <priority>${url === baseUrl ? "1.0" : "0.8"}</priority>
+    <loc>${item.loc}</loc>
+    <lastmod>${item.lastmod}</lastmod>
+    <changefreq>${item.changefreq}</changefreq>
+    <priority>${item.priority}</priority>
   </url>`;
   })
   .join("\n")}
@@ -428,6 +470,150 @@ ${urls
       });
     } catch (error: any) {
       console.error("Failed to send email to developer:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+
+  // Notify Subscribers of Tool Updates
+  app.post("/api/notify-subscribers", async (req, res) => {
+    try {
+      const { toolId, name, category, type, url, desc, apk } = req.body;
+      if (!toolId || !name) {
+        return res.status(400).json({ success: false, error: "toolId and name are required" });
+      }
+
+      // Query subscribers for this tool
+      const subsQuery = query(collection(db, "tool_subscriptions"), where("toolId", "==", toolId));
+      const subsSnapshot = await getDocs(subsQuery);
+      
+      const subscribers: any[] = [];
+      subsSnapshot.forEach((d) => {
+        subscribers.push(d.data());
+      });
+
+      if (subscribers.length === 0) {
+        return res.json({ success: true, message: "No subscribers found for this tool", count: 0 });
+      }
+
+      // Configure SMTP transporter
+      let transporter;
+      let etherealInfo = "";
+      const gmailUser = process.env.GMAIL_USER;
+      const gmailPass = process.env.GMAIL_APP_PASSWORD;
+
+      if (gmailUser && gmailPass) {
+        transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: gmailUser,
+            pass: gmailPass,
+          },
+        });
+      } else {
+        const testAccount = await nodemailer.createTestAccount();
+        transporter = nodemailer.createTransport({
+          host: "smtp.ethereal.email",
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+      }
+
+      const emailPromises = subscribers.map(async (sub) => {
+        const mailOptions = {
+          from: gmailUser ? `"AGIDAPP Updates" <${gmailUser}>` : `"AGIDAPP Updates" <updates@agidappglobal.com>`,
+          to: sub.userEmail,
+          subject: `✨ Update Alert: ${name} has been updated on AGIDAPP Global!`,
+          html: `
+            <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #030712; color: #f3f4f6; padding: 40px; border-radius: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #1f2937;">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <div style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; width: 64px; height: 64px; line-radius: 16px; font-size: 32px; margin-bottom: 16px; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);">✨</div>
+                <h1 style="color: #ffffff; font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.025em; margin: 0 0 4px 0;">Tool Update Alert</h1>
+                <p style="color: #9ca3af; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; margin: 0;">An item in your subscribed tools has changed</p>
+              </div>
+
+              <p style="font-size: 14px; line-height: 1.6; color: #d1d5db; margin-bottom: 24px;">
+                Hello,
+              </p>
+              <p style="font-size: 14px; line-height: 1.6; color: #d1d5db; margin-bottom: 24px;">
+                You are receiving this email because you subscribed to updates for <strong>${name}</strong> on AGIDAPP Global. An administrator has recently updated its details:
+              </p>
+
+              <div style="background-color: #0b0f19; border: 1px solid #1f2937; padding: 24px; border-radius: 16px; margin-bottom: 24px;">
+                <h2 style="color: #3b82f6; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0; margin-bottom: 16px; border-bottom: 1px solid #1f2937; padding-bottom: 8px;">Updated Details for ${name}</h2>
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                  <tr>
+                    <td style="color: #9ca3af; padding: 8px 0; border-bottom: 1px solid #111827; font-weight: 500;">Category:</td>
+                    <td style="color: #ffffff; padding: 8px 0; border-bottom: 1px solid #111827; font-weight: 700; text-align: right;">${category || "N/A"}</td>
+                  </tr>
+                  <tr>
+                    <td style="color: #9ca3af; padding: 8px 0; border-bottom: 1px solid #111827; font-weight: 500;">Access Type:</td>
+                    <td style="color: #ffffff; padding: 8px 0; border-bottom: 1px solid #111827; font-weight: 700; text-align: right;">${type || "N/A"}</td>
+                  </tr>
+                  ${apk ? `
+                  <tr>
+                    <td style="color: #9ca3af; padding: 8px 0; border-bottom: 1px solid #111827; font-weight: 500;">APK Package:</td>
+                    <td style="color: #3b82f6; padding: 8px 0; border-bottom: 1px solid #111827; font-weight: 700; text-align: right;"><a href="${apk}" style="color: #3b82f6; text-decoration: none;">Download APK</a></td>
+                  </tr>` : ""}
+                </table>
+
+                <div style="margin-top: 16px;">
+                  <h3 style="color: #9ca3af; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 6px 0;">Description</h3>
+                  <div style="font-size: 13px; line-height: 1.6; color: #d1d5db; background-color: #030712; padding: 12px; border-radius: 8px; border: 1px solid #111827;">
+                    ${desc || "No description provided."}
+                  </div>
+                </div>
+              </div>
+
+              <div style="text-align: center; margin-bottom: 24px;">
+                <a href="${url || `https://www.agidappglobal.com/share/${toolId}`}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-size: 14px; font-weight: 700; border-radius: 12px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); transition: background-color 0.2s;">
+                  Launch / View Tool
+                </a>
+              </div>
+
+              <div style="text-align: center; font-size: 11px; color: #6b7280; border-top: 1px solid #1f2937; padding-top: 20px;">
+                You are subscribed to updates for ${name}. To unsubscribe, visit AGIDAPP Global and toggle the subscription button on this tool.
+              </div>
+            </div>
+          `
+        };
+
+        const result = await transporter.sendMail(mailOptions);
+        
+        // Log to existing notifications system
+        await addDoc(collection(db, "notifications"), {
+          type: "tool_update_alert",
+          message: `Notified ${sub.userEmail} about updates to ${name}`,
+          userId: sub.userId,
+          userEmail: sub.userEmail,
+          timestamp: serverTimestamp(),
+          read: false
+        });
+
+        return result;
+      });
+
+      const results = await Promise.all(emailPromises);
+      console.log(`[SMTP] Dispatched ${results.length} subscription update notifications.`);
+
+      if (!gmailUser || !gmailPass) {
+        const testUrl = nodemailer.getTestMessageUrl(results[0]);
+        etherealInfo = `Preview first notification at: ${testUrl}`;
+        console.log(`[SMTP] ${etherealInfo}`);
+      }
+
+      res.json({
+        success: true,
+        message: `Notifications sent to ${subscribers.length} subscribers`,
+        count: subscribers.length,
+        etherealInfo
+      });
+    } catch (error: any) {
+      console.error("Failed to notify subscribers:", error);
       res.status(500).json({ success: false, error: error.message });
     }
   });

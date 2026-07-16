@@ -179,6 +179,35 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "userName", "voiceBase64", "duration", "createdAt"]
+    },
+    "ToolSubscription": {
+      "title": "Tool Subscription",
+      "description": "A subscription to a specific AI tool for updates",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "toolId": { "type": "string" },
+        "toolName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "subscribedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "toolId", "toolName", "userEmail", "subscribedAt"]
+    },
+    "SocialFeedEvent": {
+      "title": "Social Feed Event",
+      "description": "A public event for the global live activity feed",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["upvote", "favorite", "subscribe", "comment", "voice_comment", "tool_update_alert"] },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "toolId": { "type": "string" },
+        "toolName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": { "type": "string" }
+      },
+      "required": ["type", "toolId", "toolName", "timestamp"]
     }
   },
   "firestore": {
@@ -189,6 +218,14 @@
     "ai_tools": {
       "schema": "AiTool",
       "description": "Collection of AI tools for the directory"
+    },
+    "social_feed": {
+      "schema": "SocialFeedEvent",
+      "description": "Global live social feed events"
+    },
+    "tool_subscriptions/{subId}": {
+      "schema": "ToolSubscription",
+      "description": "Collection of subscriptions to AI tools for update alerts"
     },
     "ai_tools/{toolId}/comments": {
       "schema": "Comment",

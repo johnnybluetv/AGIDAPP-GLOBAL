@@ -55,6 +55,19 @@ export default function DriveDashboard({ tools }: DriveDashboardProps) {
   const [confirmDeleteName, setConfirmDeleteName] = React.useState<string | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
+  // Auto Sync States
+  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = React.useState<boolean>(() => {
+    return localStorage.getItem("agid_drive_autosync") !== "false";
+  });
+  const [autoSyncStatus, setAutoSyncStatus] = React.useState<"idle" | "syncing" | "success" | "error">("idle");
+  const [lastAutoSynced, setLastAutoSynced] = React.useState<Date | null>(null);
+
+  const handleToggleAutoSync = () => {
+    const nextState = !isAutoSyncEnabled;
+    setIsAutoSyncEnabled(nextState);
+    localStorage.setItem("agid_drive_autosync", String(nextState));
+  };
+
   const fetchFiles = React.useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
@@ -92,6 +105,86 @@ export default function DriveDashboard({ tools }: DriveDashboardProps) {
       fetchFiles();
     }
   }, [accessToken, fetchFiles]);
+
+  // Debounced auto-sync to agid_tools_autosync.json
+  React.useEffect(() => {
+    if (!accessToken || !isAutoSyncEnabled || tools.length === 0) return;
+
+    setAutoSyncStatus("syncing");
+    const timer = setTimeout(async () => {
+      try {
+        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name%3D%27agid_tools_autosync.json%27%20and%20trashed%3Dfalse`;
+        const searchRes = await fetch(searchUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (!searchRes.ok) {
+          throw new Error("Search request failed");
+        }
+
+        const searchData = await searchRes.json();
+        const existingFile = searchData.files && searchData.files[0];
+        const fileId = existingFile?.id;
+
+        if (fileId) {
+          const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
+          const updateRes = await fetch(updateUrl, {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(tools, null, 2),
+          });
+
+          if (!updateRes.ok) {
+            throw new Error("Update request failed");
+          }
+        } else {
+          const createMetaRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: "agid_tools_autosync.json",
+              mimeType: "application/json",
+            }),
+          });
+
+          if (!createMetaRes.ok) {
+            throw new Error("Metadata creation failed");
+          }
+
+          const createMetaData = await createMetaRes.json();
+          const newFileId = createMetaData.id;
+
+          const uploadRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`, {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(tools, null, 2),
+          });
+
+          if (!uploadRes.ok) {
+            throw new Error("Media upload failed");
+          }
+        }
+
+        setAutoSyncStatus("success");
+        setLastAutoSynced(new Date());
+        fetchFiles();
+      } catch (err) {
+        console.error("Auto-sync failed:", err);
+        setAutoSyncStatus("error");
+      }
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [tools, accessToken, isAutoSyncEnabled, fetchFiles]);
 
   const handleConnect = async () => {
     setError(null);
@@ -259,7 +352,41 @@ export default function DriveDashboard({ tools }: DriveDashboardProps) {
         </div>
 
         {accessToken ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Auto-Sync Toggle & Status */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-xl border border-slate-800">
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAutoSyncEnabled}
+                  onChange={handleToggleAutoSync}
+                  className="sr-only peer"
+                />
+                <div className="w-7 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-3 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-sky-500 peer-checked:after:bg-white peer-checked:after:border-transparent"></div>
+                <span className="ml-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Auto-Sync
+                </span>
+              </label>
+              <div className="h-4 w-px bg-slate-800" />
+              <div className="flex items-center gap-1.5">
+                {autoSyncStatus === "syncing" && (
+                  <Loader2 className="w-3 h-3 text-sky-400 animate-spin" />
+                )}
+                {autoSyncStatus === "success" && (
+                  <Check className="w-3 h-3 text-emerald-400" />
+                )}
+                {autoSyncStatus === "error" && (
+                  <AlertCircle className="w-3 h-3 text-red-400" />
+                )}
+                <span className="text-[9px] font-mono font-bold text-slate-500">
+                  {autoSyncStatus === "syncing" && "SYNCING..."}
+                  {autoSyncStatus === "success" && `SYNCED`}
+                  {autoSyncStatus === "error" && "ERROR"}
+                  {autoSyncStatus === "idle" && "IDLE"}
+                </span>
+              </div>
+            </div>
+
             <button
               onClick={handleBackupTools}
               disabled={isBackupLoading}

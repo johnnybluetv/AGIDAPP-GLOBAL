@@ -6,6 +6,7 @@ import { doc, updateDoc, increment, setDoc, deleteDoc, serverTimestamp, collecti
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import Tooltip from "./Tooltip";
+import LazyImage from "./LazyImage";
 
 const getCategoryBadgeDetails = (category: string) => {
   switch (category) {
@@ -208,6 +209,81 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
   const [showDeveloperContact, setShowDeveloperContact] = React.useState(false);
   const [showVoiceComments, setShowVoiceComments] = React.useState(false);
 
+  const [isSubscribed, setIsSubscribed] = React.useState(false);
+  const [isSubscribing, setIsSubscribing] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!user || !tool.id) {
+      setIsSubscribed(false);
+      return;
+    }
+
+    const subId = `${user.uid}_${tool.id}`;
+    const subRef = doc(db, "tool_subscriptions", subId);
+
+    const unsubscribe = onSnapshot(subRef, (snapshot) => {
+      setIsSubscribed(snapshot.exists());
+    }, (error) => {
+      console.error("Failed to read subscription status:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user, tool.id]);
+
+  const handleToggleSubscription = async () => {
+    if (!user) {
+      await login();
+      return;
+    }
+
+    setIsSubscribing(true);
+    const subId = `${user.uid}_${tool.id}`;
+    const subRef = doc(db, "tool_subscriptions", subId);
+
+    try {
+      if (isSubscribed) {
+        await deleteDoc(subRef);
+        const activityRef = collection(db, "users", user.uid, "activity");
+        await addDoc(activityRef, {
+          type: "unsubscribe",
+          targetId: tool.id,
+          targetName: tool.name,
+          timestamp: serverTimestamp()
+        });
+      } else {
+        await setDoc(subRef, {
+          userId: user.uid,
+          toolId: tool.id,
+          toolName: tool.name,
+          userEmail: user.email || "",
+          subscribedAt: serverTimestamp()
+        });
+        const activityRef = collection(db, "users", user.uid, "activity");
+        await addDoc(activityRef, {
+          type: "subscribe",
+          targetId: tool.id,
+          targetName: tool.name,
+          timestamp: serverTimestamp()
+        });
+
+        // Add event to public global social feed
+        await addDoc(collection(db, "social_feed"), {
+          type: "subscribe",
+          userId: user.uid,
+          userName: user.displayName || "Anonymous Explorer",
+          userPhoto: user.photoURL || "",
+          toolId: tool.id,
+          toolName: tool.name,
+          timestamp: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `tool_subscriptions/${subId}`);
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
   const domain = React.useMemo(() => {
     try {
       return new URL(tool.url).hostname;
@@ -373,6 +449,17 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
           timestamp: serverTimestamp()
         });
       }
+
+      // Add event to public global social feed
+      await addDoc(collection(db, "social_feed"), {
+        type: "upvote",
+        userId: user ? user.uid : "anonymous",
+        userName: user ? (user.displayName || "Anonymous Explorer") : "Anonymous Explorer",
+        userPhoto: user ? (user.photoURL || "") : "",
+        toolId: tool.id,
+        toolName: tool.name,
+        timestamp: serverTimestamp()
+      });
       
       setIsUpvoted(true);
     } catch (error) {
@@ -402,6 +489,17 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
           type: "favorite",
           targetId: tool.id,
           targetName: tool.name,
+          timestamp: serverTimestamp()
+        });
+
+        // Add event to public global social feed
+        await addDoc(collection(db, "social_feed"), {
+          type: "favorite",
+          userId: user.uid,
+          userName: user.displayName || "Anonymous Explorer",
+          userPhoto: user.photoURL || "",
+          toolId: tool.id,
+          toolName: tool.name,
           timestamp: serverTimestamp()
         });
       }
@@ -681,7 +779,7 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
                   className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-black text-[10px] transition-all shadow-lg shadow-blue-600/20 group/btn border border-blue-400/20"
                 >
                   <div className="w-3.5 h-3.5 bg-white/10 rounded-md overflow-hidden flex items-center justify-center p-0.5">
-                    <img 
+                    <LazyImage 
                       src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`} 
                       alt=""
                       className="w-full h-full object-contain"
@@ -1201,6 +1299,28 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
               </motion.button>
             </Tooltip>
 
+            {/* Subscribe to Updates button */}
+            <Tooltip text={isSubscribed ? "Subscribed (Click to Unsubscribe)" : "Subscribe to Updates"}>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={(e) => { e.stopPropagation(); handleToggleSubscription(); }}
+                disabled={isSubscribing}
+                aria-pressed={isSubscribed}
+                aria-label={isSubscribed ? "Unsubscribe from updates" : "Subscribe to updates"}
+                className={`p-2.5 sm:p-3 rounded-xl border transition-all flex items-center justify-center cursor-pointer gap-2 ${
+                  isSubscribed
+                  ? "bg-purple-500/10 text-purple-400 border-purple-500/30"
+                  : "bg-slate-800 text-slate-400 border-slate-700 hover:text-purple-400 focus:ring-2 focus:ring-purple-500/50"
+                }`}
+              >
+                <Mail className={`w-4 h-4 sm:w-5 h-5 ${isSubscribed ? "text-purple-400 stroke-[2.5]" : ""}`} aria-hidden="true" />
+                <span className="text-[9px] font-black uppercase tracking-widest hidden xs:inline">
+                  {isSubscribed ? "Subscribed" : "Subscribe"}
+                </span>
+              </motion.button>
+            </Tooltip>
+
             {/* Compare Tool button */}
             <Tooltip text={isComparing ? "Remove from Comparison" : "Add to Comparison (Max 3)"}>
               <motion.button
@@ -1392,7 +1512,7 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
               )}
 
               <div className="bg-white p-3 rounded-xl shadow-2xl flex flex-col items-center justify-center relative group/qr border-4 border-slate-800">
-                <img
+                <LazyImage
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
                     qrType === "apk" ? tool.apk || tool.url : tool.url
                   )}`}
@@ -1459,7 +1579,7 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
               <div className="bg-slate-900 border-b border-white/5 p-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-8 h-8 bg-white/10 rounded-lg overflow-hidden p-1 flex items-center justify-center">
-                    <img 
+                    <LazyImage 
                       src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`} 
                       alt=""
                       className="w-full h-full object-contain"
@@ -2074,7 +2194,7 @@ function VoiceCommentsPanel({ tool, user }: { tool: any; user: any }) {
               <div key={comment.id} className="bg-slate-950/20 border border-slate-800/60 p-3 rounded-xl flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   {comment.userPhoto ? (
-                    <img src={comment.userPhoto} alt={comment.userName} className="w-8 h-8 rounded-full border border-slate-800 shrink-0" referrerPolicy="no-referrer" />
+                    <LazyImage src={comment.userPhoto} alt={comment.userName} className="w-8 h-8 rounded-full border border-slate-800 shrink-0" referrerPolicy="no-referrer" />
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center font-black text-[10px] uppercase border border-purple-500/20 shrink-0">
                       {comment.userName.charAt(0)}
