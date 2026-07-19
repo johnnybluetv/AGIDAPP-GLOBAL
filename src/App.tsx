@@ -1,5 +1,5 @@
 import * as React from "react";
-import { onSnapshot, collection, query, orderBy } from "firebase/firestore";
+import { onSnapshot, collection, query, orderBy, getDocsFromServer, getDocs } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { AiTool, CATEGORIES, Category, UserRole } from "./types";
 import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronRight, BookOpen, Star, Users, BarChart, Cloud, Sun, Moon, ArrowLeftRight, Image as ImageIcon, FileText, Settings, Volume2, VolumeX, History, Bookmark, Folder } from "lucide-react";
@@ -80,6 +80,12 @@ export default function App() {
   const [showDrive, setShowDrive] = React.useState(false);
   const [showSocialFeed, setShowSocialFeed] = React.useState(false);
 
+  // Sync and Debug States
+  const [syncStatus, setSyncStatus] = React.useState<'live' | 'offline'>('offline');
+  const [indexingStatus, setIndexingStatus] = React.useState<'idle' | 'indexing' | 'success' | 'error'>('idle');
+  const [indexingMessage, setIndexingMessage] = React.useState('');
+  const [refreshing, setRefreshing] = React.useState(false);
+
   // Compare Mode State
   const [comparedTools, setComparedTools] = React.useState<AiTool[]>([]);
   const [showComparisonModal, setShowComparisonModal] = React.useState(false);
@@ -98,6 +104,141 @@ export default function App() {
     try {
       localStorage.setItem("agid_lang", lang);
     } catch {}
+  };
+
+  const DEMO_AI_TOOLS = React.useMemo(() => [
+    {
+      name: "ChatGPT",
+      category: "LLM & Chat" as Category,
+      type: "Web App" as const,
+      url: "https://chatgpt.com",
+      desc: "OpenAI's premier conversational AI assistant designed for drafting, learning, brainstorming, and deep productivity.",
+      upvotes: 245,
+      tags: ["llm", "chat", "openai", "productivity"],
+      averageRating: 4.8,
+      totalRatingsCount: 12
+    },
+    {
+      name: "Claude 3.5 Sonnet",
+      category: "LLM & Chat" as Category,
+      type: "Web App" as const,
+      url: "https://claude.ai",
+      desc: "Anthropic's highly sophisticated model, setting new industry benchmarks for graduate-level reasoning, undergraduate-level knowledge, and coding proficiency.",
+      upvotes: 312,
+      tags: ["llm", "chat", "anthropic", "coding"],
+      averageRating: 4.9,
+      totalRatingsCount: 15
+    },
+    {
+      name: "Midjourney v6",
+      category: "Image & Art" as Category,
+      type: "Software (Desktop)" as const,
+      url: "https://midjourney.com",
+      desc: "Generative AI program that creates stunning, photorealistic and artistic imagery from natural language descriptions via Discord.",
+      upvotes: 189,
+      tags: ["image", "art", "generation", "creative"],
+      averageRating: 4.7,
+      totalRatingsCount: 8
+    },
+    {
+      name: "Cursor AI",
+      category: "Developer Tools" as Category,
+      type: "Software (Desktop)" as const,
+      url: "https://cursor.com",
+      desc: "An advanced, AI-powered code editor built as a fork of VS Code, enabling auto-programming, smart edits, and chat-guided design directly on your files.",
+      upvotes: 278,
+      tags: ["coding", "ide", "developer-tools", "productivity"],
+      averageRating: 4.9,
+      totalRatingsCount: 10
+    },
+    {
+      name: "v0 by Vercel",
+      category: "Developer Tools" as Category,
+      type: "Web App" as const,
+      url: "https://v0.dev",
+      desc: "Generative UI system by Vercel that produces clean, copy-pasteable React, Tailwind CSS, and Shadcn UI components from simple text prompts.",
+      upvotes: 156,
+      tags: ["ui", "react", "frontend", "vercel"],
+      averageRating: 4.6,
+      totalRatingsCount: 5
+    },
+    {
+      name: "ElevenLabs Voice",
+      category: "Audio & Video" as Category,
+      type: "API / Platform" as const,
+      url: "https://elevenlabs.io",
+      desc: "Highly realistic, emotive AI text-to-speech and voice cloning software with rich developer APIs for real-time synthesis.",
+      upvotes: 203,
+      tags: ["voice", "tts", "audio", "api"],
+      averageRating: 4.8,
+      totalRatingsCount: 9
+    }
+  ], []);
+
+  const handleForceRefresh = async () => {
+    console.log("[Force Refresh] Requesting fresh data directly from Firestore server (bypassing cache)...");
+    setRefreshing(true);
+    try {
+      const q = query(collection(db, "ai_tools"), orderBy("createdAt", "desc"));
+      let snapshot;
+      try {
+        snapshot = await getDocsFromServer(q);
+        console.log(`[Force Refresh] SUCCESS: Retrieved ${snapshot.size} tools directly from Firestore server.`);
+      } catch (serverErr) {
+        console.warn("[Force Refresh] Direct server fetch failed, falling back to cache/local query:", serverErr);
+        snapshot = await getDocs(q);
+        console.log(`[Force Refresh] SUCCESS: Retrieved ${snapshot.size} tools via standard query.`);
+      }
+      const toolsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as AiTool[];
+      setTools(toolsData);
+      setSyncStatus('live');
+      setToast({ message: `Successfully refreshed! Fetched ${snapshot.size} tools.`, type: 'success' });
+      setTimeout(() => setToast(null), 3000);
+    } catch (error: any) {
+      console.error("[Force Refresh] ERROR: Direct server and cached fetch failed:", error);
+      setSyncStatus('offline');
+      setToast({ message: `Refresh failed: ${error?.message || error}`, type: 'error' });
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleDebugIndexing = async () => {
+    console.log("[Debug Indexing] Initializing automated indexation of premium AI tools...");
+    setIndexingStatus("indexing");
+    setIndexingMessage("Deploying premium tool documents to Firestore database...");
+    let count = 0;
+    try {
+      for (const t of DEMO_AI_TOOLS) {
+        if (tools.some(existingTool => existingTool.name.toLowerCase() === t.name.toLowerCase())) {
+          console.log(`[Debug Indexing] Tool "${t.name}" already exists in the local directory. Skipping.`);
+          continue;
+        }
+        await addDoc(collection(db, "ai_tools"), {
+          ...t,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        count++;
+      }
+      setIndexingStatus("success");
+      setIndexingMessage(`Successfully indexed ${count} premium AI tools!`);
+      setToast({ message: `Successfully indexed ${count} premium AI tools!`, type: 'success' });
+      setTimeout(() => setToast(null), 4000);
+      console.log(`[Debug Indexing] SUCCESS: Indexed ${count} tools.`);
+    } catch (err: any) {
+      console.error("[Debug Indexing] ERROR: Failed to index tools:", err);
+      setIndexingStatus("error");
+      setIndexingMessage(`Failed to index: ${err?.message || err}`);
+      setToast({ message: `Indexing failed: ${err?.message || err}`, type: 'error' });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setIndexingStatus("idle");
+    }
   };
 
   const t = translations[language];
@@ -437,23 +578,32 @@ export default function App() {
 
   // Real-time synchronization
   React.useEffect(() => {
+    console.log("[Firestore Listener] Setting up real-time listener for 'ai_tools'...");
     const q = query(collection(db, "ai_tools"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        console.log(`[Firestore Listener] SUCCESS: Received 'ai_tools' update. Document count: ${snapshot.size}`);
         const toolsData = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         })) as AiTool[];
         setTools(toolsData);
         setLoading(false);
+        setSyncStatus('live');
       },
       (error) => {
+        console.error("[Firestore Listener] ERROR: 'ai_tools' listener failed or was denied. Status: OFFLINE.", error);
+        setSyncStatus('offline');
+        setLoading(false);
         handleFirestoreError(error, OperationType.LIST, "ai_tools");
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      console.log("[Firestore Listener] Tearing down 'ai_tools' listener.");
+      unsubscribe();
+    };
   }, []);
 
   // Handle Deep Linking
@@ -488,13 +638,23 @@ export default function App() {
       return;
     }
 
+    console.log(`[Firestore Listener] Setting up favorites listener for user: ${user.uid}`);
     const favRef = collection(db, "users", user.uid, "favorites");
-    const unsubscribe = onSnapshot(favRef, (snapshot) => {
-      const favIds = snapshot.docs.map(doc => doc.id);
-      setFavorites(favIds);
-    });
+    const unsubscribe = onSnapshot(favRef, 
+      (snapshot) => {
+        console.log(`[Firestore Listener] SUCCESS: Received user favorites snapshot. Count: ${snapshot.size}`);
+        const favIds = snapshot.docs.map(doc => doc.id);
+        setFavorites(favIds);
+      },
+      (error) => {
+        console.error(`[Firestore Listener] ERROR: Favorites listener failed for user: ${user.uid}`, error);
+      }
+    );
 
-    return () => unsubscribe();
+    return () => {
+      console.log(`[Firestore Listener] Tearing down favorites listener for user: ${user.uid}`);
+      unsubscribe();
+    };
   }, [user]);
 
   // Listen to user bookmarks and curated projects
@@ -505,21 +665,27 @@ export default function App() {
       return;
     }
 
+    console.log(`[Firestore Listener] Setting up curated_projects and bookmarks listeners for user: ${user.uid}`);
     const projectsRef = collection(db, "users", user.uid, "curated_projects");
     const unsubProjects = onSnapshot(projectsRef, (snapshot) => {
+      console.log(`[Firestore Listener] SUCCESS: Curated projects update. Count: ${snapshot.size}`);
       setCuratedProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
     }, (error) => {
+      console.error(`[Firestore Listener] ERROR: Curated projects listener failed for user: ${user.uid}`, error);
       handleFirestoreError(error, OperationType.GET, `users/${user.uid}/curated_projects`);
     });
 
     const bookmarksRef = collection(db, "users", user.uid, "bookmarks");
     const unsubBookmarks = onSnapshot(bookmarksRef, (snapshot) => {
+      console.log(`[Firestore Listener] SUCCESS: Bookmarks update. Count: ${snapshot.size}`);
       setBookmarks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
     }, (error) => {
+      console.error(`[Firestore Listener] ERROR: Bookmarks listener failed for user: ${user.uid}`, error);
       handleFirestoreError(error, OperationType.GET, `users/${user.uid}/bookmarks`);
     });
 
     return () => {
+      console.log(`[Firestore Listener] Tearing down curated_projects and bookmarks listeners for user: ${user.uid}`);
       unsubProjects();
       unsubBookmarks();
     };
@@ -544,16 +710,28 @@ export default function App() {
       return;
     }
 
+    console.log(`[Firestore Listener] Setting up role check listener for user: ${user.email}`);
     const adminRef = doc(db, "admins", btoa(user.email?.toLowerCase() || ""));
-    const unsubscribe = onSnapshot(adminRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setUserRole(snapshot.data().role as UserRole);
-      } else {
+    const unsubscribe = onSnapshot(adminRef, 
+      (snapshot) => {
+        if (snapshot.exists()) {
+          console.log(`[Firestore Listener] SUCCESS: User has staff role: ${snapshot.data().role}`);
+          setUserRole(snapshot.data().role as UserRole);
+        } else {
+          console.log(`[Firestore Listener] User is a standard reader/user`);
+          setUserRole("User");
+        }
+      },
+      (error) => {
+        console.error(`[Firestore Listener] ERROR: Admin role check listener failed:`, error);
         setUserRole("User");
       }
-    });
+    );
 
-    return () => unsubscribe();
+    return () => {
+      console.log(`[Firestore Listener] Tearing down role check listener for user: ${user.email}`);
+      unsubscribe();
+    };
   }, [user]);
 
   // Update user profile in Firestore and send signup email notifications
@@ -1406,9 +1584,41 @@ export default function App() {
                 </AnimatePresence>
               </div>
             </div>
-            <div className="hidden md:block">
-              <h1 className="text-sm font-bold text-slate-100 uppercase tracking-widest">Artificial General Intelligence Directory</h1>
-              <p className="text-[10px] text-slate-500 font-mono">LIVE_DATABASE_SYNC: ACTIVE</p>
+            <div className="flex flex-col">
+              <h1 className="hidden sm:block text-xs md:text-sm font-bold text-slate-100 uppercase tracking-widest leading-none mb-1">Artificial General Intelligence Directory</h1>
+              <div className="flex items-center flex-wrap gap-1.5 sm:gap-2.5">
+                {/* Sync Status Badge */}
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider font-mono border ${
+                  syncStatus === 'live' 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'live' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+                  Sync: {syncStatus === 'live' ? 'Live' : 'Offline'}
+                </span>
+
+                {/* Force Refresh Button */}
+                <button
+                  onClick={handleForceRefresh}
+                  disabled={refreshing}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50"
+                  title="Force refresh data directly from Firestore server"
+                >
+                  <Zap className={`w-3 h-3 text-amber-500 ${refreshing ? 'animate-spin' : ''}`} />
+                  {refreshing ? 'Refreshed' : 'Force Refresh'}
+                </button>
+
+                {/* Debug Indexing / Seed Button */}
+                <button
+                  onClick={handleDebugIndexing}
+                  disabled={indexingStatus === 'indexing'}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50"
+                  title="Seed premium tools if directory is empty"
+                >
+                  <Database className="w-3 h-3 text-blue-500" />
+                  {indexingStatus === 'indexing' ? 'Indexing...' : 'Debug Indexing'}
+                </button>
+              </div>
             </div>
           </div>
 
