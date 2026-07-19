@@ -7,6 +7,7 @@ import { db, handleFirestoreError, OperationType } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import Tooltip from "./Tooltip";
 import LazyImage from "./LazyImage";
+import SocialShare from "./SocialShare";
 
 const getCategoryBadgeDetails = (category: string) => {
   switch (category) {
@@ -1330,39 +1331,13 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
             </Tooltip>
           </div>
 
-          <div className="flex gap-2 items-center w-full sm:w-auto justify-end">
-            <div className="flex items-center gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
-              <Tooltip text="Fast Share (Twitter)">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleShareClick("twitter"); }}
-                  className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-all"
-                  aria-label="Quick share on Twitter"
-                >
-                  <Twitter className="w-3.5 h-3.5 sm:w-4 h-4" />
-                </button>
-              </Tooltip>
-              <div className="w-px h-4 bg-slate-700 mx-0.5 sm:mx-1" />
-              <Tooltip text={shareCopied ? "Copied Link!" : "More Share Options (50+ Platforms)"}>
-                <button 
-                  onClick={async (e) => { 
-                    e.stopPropagation(); 
-                    try {
-                      const shareUrl = `https://www.agidappglobal.com/share/${tool.id}`;
-                      await navigator.clipboard.writeText(shareUrl);
-                      setShareCopied(true);
-                      setTimeout(() => setShareCopied(false), 2000);
-                    } catch (err) {
-                      console.error("Failed to copy link", err);
-                    }
-                    setIsShareModalOpen(true); 
-                  }}
-                  className={`p-1.5 sm:p-2 rounded-lg transition-all ${shareCopied ? 'text-emerald-400 bg-emerald-500/10' : 'text-blue-400 hover:text-white hover:bg-blue-500'}`}
-                  aria-label="Open expanded share menu"
-                >
-                  {shareCopied ? <Check className="w-3.5 h-3.5 sm:w-4 h-4" /> : <Share2 className="w-3.5 h-3.5 sm:w-4 h-4" aria-hidden="true" />}
-                </button>
-              </Tooltip>
-            </div>
+          <div className="flex gap-2 items-center w-full sm:w-auto justify-end" onClick={(e) => e.stopPropagation()}>
+            <SocialShare 
+              url={`https://www.agidappglobal.com/share/${tool.id}`} 
+              title={tool.name} 
+              text={tool.desc}
+              variant="compact"
+            />
           </div>
         </div>
       </div>

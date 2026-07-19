@@ -1,12 +1,14 @@
 import * as React from "react";
-import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, increment as firestoreIncrement } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, increment as firestoreIncrement } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Article, UserRole } from "../types";
 import { motion, AnimatePresence } from "motion/react";
-import { BookOpen, X, Clock, User, ChevronRight, BookOpenCheck, Info, Eye } from "lucide-react";
+import { BookOpen, X, Clock, User, ChevronRight, BookOpenCheck, Info, Eye, Heart, Share2, Twitter, Linkedin, Facebook, Check, Globe, Copy, MessageSquare, AlertCircle } from "lucide-react";
 import Markdown from "react-markdown";
 import { Helmet } from "react-helmet-async";
 import CommentSection from "./CommentSection";
+import { useAuth } from "../context/AuthContext";
+import ShareModal from "./ShareModal";
 
 interface ArticlesListProps {
   onClose: () => void;
@@ -15,10 +17,93 @@ interface ArticlesListProps {
 }
 
 export default function ArticlesList({ onClose, currentUserRole, initialArticleId }: ArticlesListProps) {
+  const { user } = useAuth();
   const [articles, setArticles] = React.useState<Article[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [selectedArticle, setSelectedArticle] = React.useState<Article | null>(null);
   const [mobileView, setMobileView] = React.useState<'list' | 'content'>('list');
+  const [likedArticles, setLikedArticles] = React.useState<string[]>([]);
+  const [copied, setCopied] = React.useState<string | null>(null);
+
+  // ShareModal State
+  const [shareModalConfig, setShareModalConfig] = React.useState<{
+    isOpen: boolean;
+    url: string;
+    title: string;
+    text?: string;
+    image?: string;
+  }>({
+    isOpen: false,
+    url: "",
+    title: "",
+    text: "",
+    image: "",
+  });
+
+  const handleOpenShareModal = (article: Article, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const shareUrl = `${window.location.origin}?articleId=${article.id}`;
+    setShareModalConfig({
+      isOpen: true,
+      url: shareUrl,
+      title: article.title,
+      text: `Read "${article.title}" by ${article.authorName} on Agidapp Global Knowledge!`,
+      image: article.mediaUrl || "",
+    });
+  };
+
+  const getReadTime = (content: string) => {
+    const wordsPerMinute = 225;
+    const words = content.trim().split(/\s+/).length;
+    const minutes = Math.ceil(words / wordsPerMinute);
+    return `${minutes} min read`;
+  };
+
+  const handleToggleLike = async (articleId: string) => {
+    if (!user) {
+      alert("Please sign in or register to upvote articles.");
+      return;
+    }
+    const isLiked = likedArticles.includes(articleId);
+    try {
+      const userLikeRef = doc(db, "users", user.uid, "liked_articles", articleId);
+      const articleRef = doc(db, "articles", articleId);
+      
+      if (isLiked) {
+        await deleteDoc(userLikeRef);
+        await updateDoc(articleRef, {
+          likesCount: firestoreIncrement(-1)
+        });
+      } else {
+        await setDoc(userLikeRef, {
+          articleId,
+          likedAt: serverTimestamp()
+        });
+        await updateDoc(articleRef, {
+          likesCount: firestoreIncrement(1)
+        });
+      }
+    } catch (e) {
+      console.error("Failed to toggle upvote/like:", e);
+    }
+  };
+
+  // Sync user's liked articles
+  React.useEffect(() => {
+    if (!user) {
+      setLikedArticles([]);
+      return;
+    }
+    const likedRef = collection(db, "users", user.uid, "liked_articles");
+    const unsubscribe = onSnapshot(likedRef, (snapshot) => {
+      setLikedArticles(snapshot.docs.map(doc => doc.id));
+    }, (error) => {
+      console.error("Error loading user likes:", error);
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   const handleSelectArticle = async (article: Article) => {
     setSelectedArticle(article);
@@ -34,6 +119,30 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
     }
   };
 
+  // Load initial offline articles on mount instantly
+  React.useEffect(() => {
+    try {
+      const cached = localStorage.getItem("offline_articles");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log(`[Offline Support] Loaded ${parsed.length} articles from offline cache.`);
+          setArticles(parsed);
+          setLoading(false);
+          if (initialArticleId) {
+            const art = parsed.find(a => a.id === initialArticleId);
+            if (art) {
+              setSelectedArticle(art);
+              setMobileView('content');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load initial offline articles:", e);
+    }
+  }, [initialArticleId]);
+
   React.useEffect(() => {
     const q = query(collection(db, "articles"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -44,12 +153,37 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
       setArticles(artData);
       setLoading(false);
 
+      // Cache articles
+      try {
+        localStorage.setItem("offline_articles", JSON.stringify(artData));
+        if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: "CACHE_DATA",
+            key: "articles",
+            data: artData
+          });
+        }
+      } catch (cacheErr) {
+        console.warn("Failed to update articles cache:", cacheErr);
+      }
+
       if (initialArticleId) {
         const art = artData.find(a => a.id === initialArticleId);
         if (art) {
           setSelectedArticle(art);
           setMobileView('content');
         }
+      }
+    }, (error) => {
+      console.error("[Firestore Articles] Failed to fetch articles, attempting fallback:", error);
+      setLoading(false);
+      try {
+        const cached = localStorage.getItem("offline_articles");
+        if (cached) {
+          setArticles(JSON.parse(cached));
+        }
+      } catch (e) {
+        console.warn("Offline articles fallback failed:", e);
       }
     });
     return () => unsubscribe();
@@ -129,7 +263,22 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
                        <span className={`text-[9px] font-bold uppercase tracking-tighter ${selectedArticle?.id === article.id ? 'text-blue-100' : 'text-slate-500'}`}>
                         {article.authorName.split(' ')[0]}
                       </span>
-                      <ChevronRight className={`w-3 h-3 transition-transform ${selectedArticle?.id === article.id ? 'text-white translate-x-1' : 'text-slate-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5'}`} />
+                      <div className="flex items-center gap-1.5">
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={(e) => handleOpenShareModal(article, e)}
+                          className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                            selectedArticle?.id === article.id 
+                            ? 'bg-blue-700 hover:bg-blue-800 text-white border-blue-400/20' 
+                            : 'bg-slate-950/80 hover:bg-slate-800 text-slate-400 hover:text-blue-400 border-slate-800/80'
+                          }`}
+                          title="Share Article"
+                        >
+                          <Share2 className="w-3 h-3" />
+                        </motion.button>
+                        <ChevronRight className={`w-3 h-3 transition-transform ${selectedArticle?.id === article.id ? 'text-white translate-x-1' : 'text-slate-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5'}`} />
+                      </div>
                     </div>
                   </button>
                 ))
@@ -192,6 +341,8 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
                       <div className="flex items-center gap-2 text-slate-500 text-[10px] font-bold uppercase tracking-widest">
                         <Clock className="w-3 h-3" />
                         {selectedArticle.createdAt?.toDate().toLocaleDateString()}
+                        <span className="text-slate-700 mx-1">•</span>
+                        <span>{getReadTime(selectedArticle.content)}</span>
                       </div>
                       {['Admin', 'Manager', 'Editor'].includes(currentUserRole) && (
                         <div className="flex items-center gap-2 text-blue-400 text-[10px] font-bold uppercase tracking-widest bg-blue-400/5 px-2 py-1 rounded-lg border border-blue-400/10">
@@ -208,12 +359,50 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
                         {selectedArticle.authorPhoto ? (
                              <img src={selectedArticle.authorPhoto} alt="" className="w-full h-full object-cover" />
                         ) : (
-                            <User className="w-6 h-6 text-slate-600" />
+                             <User className="w-6 h-6 text-slate-600" />
                         )}
                       </div>
                       <div>
                         <div className="text-sm font-black text-white">{selectedArticle.authorName}</div>
                         <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{selectedArticle.authorRole}</div>
+                      </div>
+                    </div>
+
+                    {/* Social Media Sharing and Upvote/Like Action Panel */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 mt-6 bg-slate-900/40 rounded-2xl border border-slate-800/80">
+                      {/* Left: Like/Upvote and Views */}
+                      <div className="flex items-center gap-3">
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleToggleLike(selectedArticle.id)}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${
+                            likedArticles.includes(selectedArticle.id)
+                              ? "bg-rose-500/20 text-rose-400 border-rose-500/40 shadow-lg shadow-rose-500/10"
+                              : "bg-slate-950 border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/30"
+                          }`}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${likedArticles.includes(selectedArticle.id) ? "fill-rose-400 text-rose-400" : ""}`} />
+                          <span>{selectedArticle.likesCount || 0} Upvotes</span>
+                        </motion.button>
+
+                        <div className="flex items-center gap-2 text-slate-500 text-[9px] font-bold uppercase tracking-widest bg-slate-950 px-3 py-2.5 rounded-xl border border-slate-800">
+                          <Eye className="w-3.5 h-3.5 text-blue-400" />
+                          <span>{selectedArticle.views || 0} Views</span>
+                        </div>
+                      </div>
+
+                      {/* Right: Consolidated Unified Social Share button */}
+                      <div className="flex items-center gap-2">
+                        <motion.button
+                          whileHover={{ scale: 1.05, boxShadow: "0 0 15px rgba(59, 130, 246, 0.3)" }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleOpenShareModal(selectedArticle)}
+                          className="flex items-center gap-2 px-5 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all border border-blue-500/30 cursor-pointer shadow-lg shadow-blue-500/10"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          <span>Share Article</span>
+                        </motion.button>
                       </div>
                     </div>
                   </div>
@@ -260,7 +449,7 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
                   </div>
 
                   <div className="mt-20 pt-10 border-t border-slate-800">
-                    <CommentSection id={selectedArticle.id} type="article" isAdmin={currentUserRole !== "User"} />
+                    <CommentSection id={selectedArticle.id} type="article" isAdmin={currentUserRole !== "User"} authorId={selectedArticle.authorId} />
                   </div>
                 </motion.article>
               ) : (
@@ -278,6 +467,16 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
           </div>
         </div>
       </motion.div>
+
+      {/* Unified Share Modal */}
+      <ShareModal
+        isOpen={shareModalConfig.isOpen}
+        onClose={() => setShareModalConfig(prev => ({ ...prev, isOpen: false }))}
+        url={shareModalConfig.url}
+        title={shareModalConfig.title}
+        text={shareModalConfig.text}
+        image={shareModalConfig.image}
+      />
     </div>
   );
 }

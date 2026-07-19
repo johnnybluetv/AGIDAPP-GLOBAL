@@ -3,18 +3,19 @@ import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc,
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { Comment } from "../types";
-import { Send, Trash2, MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Clock, Flame } from "lucide-react";
+import { Send, Trash2, MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Clock, Flame, Pencil } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface CommentSectionProps {
   id: string;
   type: 'tool' | 'article';
   isAdmin: boolean;
+  authorId?: string;
 }
 
 type SortOption = "newest" | "popular";
 
-export default function CommentSection({ id, type, isAdmin }: CommentSectionProps) {
+export default function CommentSection({ id, type, isAdmin, authorId }: CommentSectionProps) {
   const { user, login } = useAuth();
   const [comments, setComments] = React.useState<Comment[]>([]);
   const [newComment, setNewComment] = React.useState("");
@@ -22,6 +23,8 @@ export default function CommentSection({ id, type, isAdmin }: CommentSectionProp
   const [sortBy, setSortBy] = React.useState<SortOption>("newest");
   const [replyingTo, setReplyingTo] = React.useState<Comment | null>(null);
   const [userLikes, setUserLikes] = React.useState<Set<string>>(new Set());
+  const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
+  const [editingText, setEditingText] = React.useState("");
 
   const collectionPath = type === 'tool' ? "ai_tools" : "articles";
 
@@ -101,15 +104,32 @@ export default function CommentSection({ id, type, isAdmin }: CommentSectionProp
       login();
       return;
     }
-    if (userLikes.has(commentId)) return;
+    const hasLiked = userLikes.has(commentId);
 
     try {
       await updateDoc(doc(db, collectionPath, id, "comments", commentId), {
-        likesCount: increment(1)
+        likesCount: increment(hasLiked ? -1 : 1)
       });
-      const newLikes = new Set(userLikes).add(commentId);
+      const newLikes = new Set(userLikes);
+      if (hasLiked) {
+        newLikes.delete(commentId);
+      } else {
+        newLikes.add(commentId);
+      }
       setUserLikes(newLikes);
       localStorage.setItem(`likes_${user.uid}`, JSON.stringify(Array.from(newLikes)));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `${collectionPath}/${id}/comments/${commentId}`);
+    }
+  };
+
+  const handleEditSave = async (commentId: string) => {
+    if (!editingText.trim()) return;
+    try {
+      await updateDoc(doc(db, collectionPath, id, "comments", commentId), {
+        text: editingText.trim()
+      });
+      setEditingCommentId(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `${collectionPath}/${id}/comments/${commentId}`);
     }
@@ -134,9 +154,27 @@ export default function CommentSection({ id, type, isAdmin }: CommentSectionProp
       .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
   };
 
+  const formatRelativeTime = (timestamp: any) => {
+    if (!timestamp) return "Pending...";
+    const date = timestamp.toMillis ? new Date(timestamp.toMillis()) : new Date(timestamp);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return "Just now";
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    
+    return date.toLocaleDateString();
+  };
+
   const renderComment = (comment: Comment, isReply = false) => {
     const replies = getReplies(comment.id);
     const hasLiked = userLikes.has(comment.id);
+    const isCurrentlyEditing = editingCommentId === comment.id;
 
     return (
       <div key={comment.id} className={`${isReply ? 'ml-12 mt-4' : 'mt-6'}`}>
@@ -157,15 +195,34 @@ export default function CommentSection({ id, type, isAdmin }: CommentSectionProp
                   <span className={`${isReply ? 'text-[11px]' : 'text-xs'} font-black text-white uppercase tracking-tighter`}>
                     {comment.userName}
                   </span>
+                  
+                  {comment.userId === authorId && (
+                    <span className="text-[8px] font-extrabold tracking-widest bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded uppercase leading-none">
+                      {type === 'tool' ? 'Creator' : 'Author'}
+                    </span>
+                  )}
+                  
                   <span className="text-[9px] text-slate-500 font-mono uppercase">
-                    {comment.createdAt?.toMillis ? new Date(comment.createdAt.toMillis()).toLocaleDateString() : "Pending..."}
+                    {formatRelativeTime(comment.createdAt)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {user?.uid === comment.userId && !isCurrentlyEditing && (
+                    <button 
+                      onClick={() => {
+                        setEditingCommentId(comment.id);
+                        setEditingText(comment.text);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-blue-400 transition-all cursor-pointer"
+                      title="Edit comment"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   {(user?.uid === comment.userId || isAdmin) && (
                     <button 
                       onClick={() => handleDelete(comment.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 transition-all cursor-pointer"
                       title="Delete comment"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -173,14 +230,42 @@ export default function CommentSection({ id, type, isAdmin }: CommentSectionProp
                   )}
                 </div>
               </div>
-              <p className={`${isReply ? 'text-xs' : 'text-sm'} text-slate-300 leading-relaxed`}>
-                {comment.text}
-              </p>
+
+              {isCurrentlyEditing ? (
+                <div className="mt-2 space-y-2">
+                  <textarea
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-all text-sm resize-none h-20 placeholder:text-slate-700"
+                    maxLength={500}
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setEditingCommentId(null)}
+                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold uppercase rounded-lg transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEditSave(comment.id)}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase rounded-lg transition-all cursor-pointer"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className={`${isReply ? 'text-xs' : 'text-sm'} text-slate-300 leading-relaxed break-words whitespace-pre-wrap`}>
+                  {comment.text}
+                </p>
+              )}
               
               <div className="mt-4 flex items-center gap-4">
                 <button 
                   onClick={() => handleLike(comment.id)}
-                  className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest transition-all ${
+                  className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
                     hasLiked ? 'text-blue-400' : 'text-slate-500 hover:text-blue-400'
                   }`}
                 >
@@ -191,7 +276,7 @@ export default function CommentSection({ id, type, isAdmin }: CommentSectionProp
                 {!isReply && (
                   <button 
                     onClick={() => setReplyingTo(replyingTo?.id === comment.id ? null : comment)}
-                    className="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-white font-black uppercase tracking-widest transition-all"
+                    className="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-white font-black uppercase tracking-widest transition-all cursor-pointer"
                   >
                     <Reply className="w-3 h-3" />
                     Reply

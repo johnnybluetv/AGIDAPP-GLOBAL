@@ -16,9 +16,10 @@ interface UserProfileProps {
   favoriteIds: string[];
   userRole: string;
   userId?: string | null;
+  onPostSomething?: () => void;
 }
 
-export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewTool, onShareTool, favoriteIds, userRole, userId }: UserProfileProps) {
+export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewTool, onShareTool, favoriteIds, userRole, userId, onPostSomething }: UserProfileProps) {
   const { user: currentUser, logout } = useAuth();
   const targetUid = userId || currentUser?.uid;
   const isOwnProfile = targetUid === currentUser?.uid;
@@ -684,6 +685,16 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                         >
                           <Settings className="w-4 h-4" aria-hidden="true" /> Edit Profile
                         </button>
+                        {onPostSomething && (
+                          <motion.button 
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={onPostSomething}
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-black text-sm transition-all shadow-lg shadow-amber-500/20 border border-amber-400/20 cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4" aria-hidden="true" /> Post Something
+                          </motion.button>
+                        )}
                         <button 
                           onClick={logout}
                           className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 text-slate-500 rounded-xl font-bold text-sm hover:text-red-400 transition-all border border-slate-800 focus:ring-2 focus:ring-red-500"
@@ -902,6 +913,24 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                         exit={{ opacity: 0, x: -20 }}
                         className="space-y-6 outline-none"
                       >
+                        {isOwnProfile && onPostSomething && (
+                          <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 p-5 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div>
+                              <h4 className="text-sm font-black text-white">Share your latest AI build or tech insights!</h4>
+                              <p className="text-xs text-slate-400 mt-1">Publish articles, updates, and reviews to the global directory.</p>
+                            </div>
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={onPostSomething}
+                              className="whitespace-nowrap px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Write/Post Article
+                            </motion.button>
+                          </div>
+                        )}
+
                         {userArticles.length > 0 ? userArticles.map(art => (
                           <div key={art.id} className="bg-slate-950/50 border border-slate-800/80 p-6 rounded-3xl hover:border-slate-700 transition-all">
                             <div className="flex items-center gap-3 mb-4">
@@ -950,12 +979,23 @@ export default function UserProfile({ onClose, onEditTool, onDeleteTool, onViewT
                             </div>
                           </div>
                         )) : (
-                          <div className="py-20 bg-slate-950/30 border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-center">
+                          <div className="py-20 bg-slate-950/30 border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-center px-4">
                             <Quote className="w-12 h-12 text-slate-700 mb-4" aria-hidden="true" />
                             <h4 className="text-xl font-bold text-white mb-2">No Published Posts</h4>
-                            <p className="text-slate-500 max-w-xs">
-                              {profile?.displayName} hasn't published any product updates or tech insights yet.
+                            <p className="text-slate-500 max-w-xs mb-5">
+                              {profile?.displayName || "This user"} hasn't published any product updates or tech insights yet.
                             </p>
+                            {isOwnProfile && onPostSomething && (
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={onPostSomething}
+                                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2 cursor-pointer"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Post Your First Article
+                              </motion.button>
+                            )}
                           </div>
                         )}
                       </motion.div>

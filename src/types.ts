@@ -131,6 +131,7 @@ export interface Article {
   mediaUrl?: string;
   mediaType?: 'image' | 'video' | 'document';
   videoEmbedUrl?: string;
+  likesCount?: number;
 }
 
 export const CATEGORIES: Category[] = ["LLM & Chat", "Image & Art", "Developer Tools", "Productivity", "Audio & Video", "Other"];

@@ -2,7 +2,7 @@ import * as React from "react";
 import { onSnapshot, collection, query, orderBy, getDocsFromServer, getDocs } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { AiTool, CATEGORIES, Category, UserRole } from "./types";
-import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronRight, BookOpen, Star, Users, BarChart, Cloud, Sun, Moon, ArrowLeftRight, Image as ImageIcon, FileText, Settings, Volume2, VolumeX, History, Bookmark, Folder } from "lucide-react";
+import { Search, Filter, Menu, X, Rocket, Zap, Database, ExternalLink, Plus, ArrowUp, Edit, Trash2, Share2, Info, ThumbsUp, Globe, LogIn, LogOut, Heart, User as UserIcon, MessageSquare, Shield, AlertTriangle, ChevronLeft, ChevronRight, BookOpen, Star, Users, BarChart, Cloud, Sun, Moon, ArrowLeftRight, Image as ImageIcon, FileText, Settings, Volume2, VolumeX, History, Bookmark, Folder } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useSpring } from "motion/react";
 import ToolCard from "./components/ToolCard";
 import { Sparkles, Palette, Code2, Box, Video as VideoIcon } from "lucide-react";
@@ -17,11 +17,13 @@ import RelatedTools from "./components/RelatedTools";
 import ArticleSubmitForm from "./components/ArticleSubmitForm";
 import ArticlesList from "./components/ArticlesList";
 import Onboarding from "./components/Onboarding";
+import SocialShare from "./components/SocialShare";
 import SoundActivationModal from "./components/SoundActivationModal";
 import LogoSnowfall from "./components/LogoSnowfall";
 import UserWaterfall from "./components/UserWaterfall";
 import { translations, Language } from "./lib/translations";
 import ToolRecommender from "./components/ToolRecommender";
+import RecommendedForYou from "./components/RecommendedForYou";
 import StatsDashboard from "./components/StatsDashboard";
 import VoiceSearch from "./components/VoiceSearch";
 import DriveDashboard from "./components/DriveDashboard";
@@ -264,11 +266,89 @@ export default function App() {
     return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
   });
 
+  // Header scroll & dragging state
+  const headerScrollRef = React.useRef<HTMLDivElement>(null);
+  const [showLeftArrow, setShowLeftArrow] = React.useState(false);
+  const [showRightArrow, setShowRightArrow] = React.useState(false);
+  const [isHeaderDragging, setIsHeaderDragging] = React.useState(false);
+  const [headerStartX, setHeaderStartX] = React.useState(0);
+  const [headerScrollLeft, setHeaderScrollLeft] = React.useState(0);
+
+  const updateScrollArrows = React.useCallback(() => {
+    const el = headerScrollRef.current;
+    if (el) {
+      const canScrollLeft = el.scrollLeft > 2;
+      const canScrollRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+      setShowLeftArrow(canScrollLeft);
+      setShowRightArrow(canScrollRight);
+    }
+  }, []);
+
+  const scrollHeader = (direction: 'left' | 'right') => {
+    const el = headerScrollRef.current;
+    if (el) {
+      const scrollAmount = 350;
+      el.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+      // Play sound if enabled
+      if (soundPreference === 'enabled') {
+        playRandomInteractiveSound();
+      }
+    }
+  };
+
+  const handleHeaderMouseDown = (e: React.MouseEvent) => {
+    const el = headerScrollRef.current;
+    if (!el) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select')) {
+      return;
+    }
+    setIsHeaderDragging(true);
+    setHeaderStartX(e.pageX - el.offsetLeft);
+    setHeaderScrollLeft(el.scrollLeft);
+  };
+
+  const handleHeaderMouseMove = (e: React.MouseEvent) => {
+    if (!isHeaderDragging) return;
+    e.preventDefault();
+    const el = headerScrollRef.current;
+    if (!el) return;
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - headerStartX) * 1.5;
+    el.scrollLeft = headerScrollLeft - walk;
+    updateScrollArrows();
+  };
+
+  const handleHeaderMouseUpOrLeave = () => {
+    setIsHeaderDragging(false);
+  };
+
+  React.useEffect(() => {
+    const el = headerScrollRef.current;
+    if (el) {
+      const timer = setTimeout(updateScrollArrows, 300);
+      
+      const observer = new ResizeObserver(() => {
+        updateScrollArrows();
+      });
+      observer.observe(el);
+
+      return () => {
+        clearTimeout(timer);
+        observer.disconnect();
+      };
+    }
+  }, [updateScrollArrows, tools, user, showSocialFeed, comparedTools]);
+
   // Spinning Galaxy State
   const [showSpinningGalaxy, setShowSpinningGalaxy] = React.useState(false);
 
   // Legal, Privacy, Contact Modal State
   const [legalModalTab, setLegalModalTab] = React.useState<'terms' | 'privacy' | 'contact' | null>(null);
+  const [showSharePanel, setShowSharePanel] = React.useState<boolean>(false);
 
   // Sound preference state
   const [soundPreference, setSoundPreference] = React.useState<'enabled' | 'disabled' | 'unasked'>(() => {
@@ -576,6 +656,23 @@ export default function App() {
     restDelta: 0.001
   });
 
+  // Load initial offline tools instantly from localStorage/Service Worker cache on mount
+  React.useEffect(() => {
+    try {
+      const cached = localStorage.getItem("offline_tools");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log(`[Offline Support] Mounted: loaded ${parsed.length} tools from offline localStorage.`);
+          setTools(parsed);
+          setLoading(false);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load initial offline tools on mount:", e);
+    }
+  }, []);
+
   // Real-time synchronization
   React.useEffect(() => {
     console.log("[Firestore Listener] Setting up real-time listener for 'ai_tools'...");
@@ -591,11 +688,40 @@ export default function App() {
         setTools(toolsData);
         setLoading(false);
         setSyncStatus('live');
+
+        // Cache to local storage and service worker for offline viewing
+        try {
+          localStorage.setItem("offline_tools", JSON.stringify(toolsData));
+          if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+              type: "CACHE_DATA",
+              key: "tools",
+              data: toolsData
+            });
+          }
+        } catch (cacheErr) {
+          console.warn("Failed to update tools cache:", cacheErr);
+        }
       },
       (error) => {
         console.error("[Firestore Listener] ERROR: 'ai_tools' listener failed or was denied. Status: OFFLINE.", error);
         setSyncStatus('offline');
         setLoading(false);
+
+        // Try fallback to offline cache when listener fails
+        try {
+          const cached = localStorage.getItem("offline_tools");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setTools(parsed);
+              console.log("[Offline Support] Offline mode fallback success: loaded tools from local storage.");
+            }
+          }
+        } catch (e) {
+          console.warn("Offline fallback query failed:", e);
+        }
+
         handleFirestoreError(error, OperationType.LIST, "ai_tools");
       }
     );
@@ -638,6 +764,16 @@ export default function App() {
       return;
     }
 
+    // Load initial favorites from localStorage
+    try {
+      const cached = localStorage.getItem(`offline_favorites_${user.uid}`);
+      if (cached) {
+        setFavorites(JSON.parse(cached));
+      }
+    } catch (e) {
+      console.warn("Failed to load initial offline favorites:", e);
+    }
+
     console.log(`[Firestore Listener] Setting up favorites listener for user: ${user.uid}`);
     const favRef = collection(db, "users", user.uid, "favorites");
     const unsubscribe = onSnapshot(favRef, 
@@ -645,9 +781,33 @@ export default function App() {
         console.log(`[Firestore Listener] SUCCESS: Received user favorites snapshot. Count: ${snapshot.size}`);
         const favIds = snapshot.docs.map(doc => doc.id);
         setFavorites(favIds);
+
+        // Cache favorites
+        try {
+          localStorage.setItem(`offline_favorites_${user.uid}`, JSON.stringify(favIds));
+          if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+              type: "CACHE_DATA",
+              key: "favorites",
+              data: favIds
+            });
+          }
+        } catch (cacheErr) {
+          console.warn("Failed to update favorites cache:", cacheErr);
+        }
       },
       (error) => {
         console.error(`[Firestore Listener] ERROR: Favorites listener failed for user: ${user.uid}`, error);
+        
+        // Offline / Error fallback
+        try {
+          const cached = localStorage.getItem(`offline_favorites_${user.uid}`);
+          if (cached) {
+            setFavorites(JSON.parse(cached));
+          }
+        } catch (e) {
+          console.warn("Offline favorites fallback failed:", e);
+        }
       }
     );
 
@@ -1008,6 +1168,111 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleVoiceCommand = (rawTranscript: string): boolean => {
+    const text = rawTranscript.toLowerCase().trim();
+    console.log("[Voice Command Parser] Analyzing raw text:", text);
+    
+    if (
+      text.includes("reset") || 
+      text.includes("clear filter") || 
+      text.includes("show all") || 
+      text.includes("start over") ||
+      text === "all" ||
+      text === "show all tools"
+    ) {
+      setSelectedCategory("All");
+      setSortBy("newest");
+      setShowFavoritesOnly(false);
+      setPricingFilter("All");
+      setSearchQuery("");
+      setToast({ message: "Cleared all filters and reset directory", type: "success" });
+      setTimeout(() => setToast(null), 3000);
+      return true;
+    }
+
+    let targetCategory: Category | "All" | null = null;
+    let categoryName = "";
+    if (text.includes("developer") || text.includes("dev ") || text.includes(" dev") || text.includes("coder") || text.includes("programming")) {
+      targetCategory = "Developer Tools";
+      categoryName = "Developer Tools";
+    } else if (text.includes("chat") || text.includes("llm") || text.includes("gpt") || text.includes("language")) {
+      targetCategory = "LLM & Chat";
+      categoryName = "LLM & Chat";
+    } else if (text.includes("image") || text.includes("art") || text.includes("draw") || text.includes("paint") || text.includes("photo") || text.includes("picture")) {
+      targetCategory = "Image & Art";
+      categoryName = "Image & Art";
+    } else if (text.includes("productivity") || text.includes("work") || text.includes("schedule") || text.includes("organize")) {
+      targetCategory = "Productivity";
+      categoryName = "Productivity";
+    } else if (text.includes("audio") || text.includes("video") || text.includes("music") || text.includes("sound") || text.includes("voice")) {
+      targetCategory = "Audio & Video";
+      categoryName = "Audio & Video";
+    } else if (text.includes("other") || text.includes("misc")) {
+      targetCategory = "Other";
+      categoryName = "Other Tools";
+    }
+
+    let targetSort: "newest" | "popular" | "alpha" | "rating" | null = null;
+    let sortName = "";
+    if (text.includes("highest rated") || text.includes("top rated") || text.includes("best rated") || text.includes("rating")) {
+      targetSort = "rating";
+      sortName = "Highest Rated";
+    } else if (text.includes("popular") || text.includes("most upvoted") || text.includes("most popular") || text.includes("upvotes")) {
+      targetSort = "popular";
+      sortName = "Most Popular";
+    } else if (text.includes("newest") || text.includes("latest") || text.includes("recent") || text.includes("recent tools")) {
+      targetSort = "newest";
+      sortName = "Newest";
+    } else if (text.includes("alphabetical") || text.includes("alpha") || text.includes("name")) {
+      targetSort = "alpha";
+      sortName = "Alphabetical";
+    }
+
+    let targetPricing: "All" | "Free" | "Open Source" | null = null;
+    let pricingName = "";
+    if (text.includes("open source") || text.includes("opensource")) {
+      targetPricing = "Open Source";
+      pricingName = "Open Source";
+    } else if (text.includes("free")) {
+      targetPricing = "Free";
+      pricingName = "Free";
+    }
+
+    let targetFavorites: boolean | null = null;
+    if (text.includes("favorite") || text.includes("my favorite") || text.includes("favorites")) {
+      targetFavorites = true;
+    }
+
+    if (targetCategory || targetSort || targetPricing || targetFavorites !== null) {
+      const parts: string[] = [];
+
+      if (targetCategory) {
+        setSelectedCategory(targetCategory);
+        parts.push(`Category: ${categoryName}`);
+      }
+      if (targetSort) {
+        setSortBy(targetSort);
+        parts.push(`Sorted by: ${sortName}`);
+      }
+      if (targetPricing) {
+        setPricingFilter(targetPricing);
+        parts.push(`Pricing: ${pricingName}`);
+      }
+      if (targetFavorites !== null) {
+        setShowFavoritesOnly(targetFavorites);
+        parts.push("Show Favorites");
+      }
+
+      setSearchQuery("");
+      const appliedMessage = `Applied voice command: ${parts.join(" | ")}`;
+      setToast({ message: appliedMessage, type: "success" });
+      setTimeout(() => setToast(null), 4000);
+      return true;
+    }
+
+    return false;
+  };
+
   const handleSearchChange = (val: string) => {
     setSearchQuery(val);
     setFocusedSuggestionIndex(-1);
@@ -1109,9 +1374,9 @@ export default function App() {
 
     const intents = {
       isFree: q.includes("free") || q.includes("open source"),
-      isMobile: q.includes("mobile") || q.includes("phone") || q.includes("app"),
-      isDev: q.includes("dev") || q.includes("api") || q.includes("sdk"),
-      isArt: q.includes("art") || q.includes("image") || q.includes("draw"),
+      isMobile: q.includes("mobile") || q.includes("phone") || q.includes("apk") || q.includes("android") || q.includes("ios"),
+      isDev: q.includes("developer") || q.includes("api") || q.includes("sdk") || q.includes("coding"),
+      isArt: q.includes("art") || q.includes("image") || q.includes("draw") || q.includes("design"),
     };
 
     return intents;
@@ -1535,19 +1800,21 @@ export default function App() {
 
       {/* Header */}
       <header className="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-6 min-h-[5.5rem] py-2.5 flex items-center justify-between gap-4 overflow-hidden relative">
+          
+          {/* Brand Logo & Screen mode (Fixed Left Column) */}
+          <div className="flex flex-col items-start gap-1.5 shrink-0 z-10 bg-slate-950/80 pr-2">
             <div className="flex items-center gap-2">
-              <div className="px-3 py-1 bg-blue-600 rounded-lg text-white font-black tracking-tighter text-2xl shadow-lg shadow-blue-600/20">
+              <div className="px-2.5 py-0.5 sm:py-1 bg-blue-600 rounded-lg text-white font-black tracking-tighter text-lg sm:text-xl shadow-lg shadow-blue-600/20 select-none">
                 Agidapp Global
               </div>
               <div className="relative">
                 <button 
                   onClick={() => setShowScreenModeMenu(!showScreenModeMenu)}
-                  className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all shadow-xl group"
+                  className="p-1.5 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all shadow-xl group cursor-pointer"
                   title="Choose a Screen Type"
                 >
-                  <span className="text-lg">🌈</span>
+                  <span className="text-sm">🌈</span>
                 </button>
                 <div className="absolute top-full left-0 mt-2 pointer-events-none">
                   <p className="text-[7px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-950/80 px-1 rounded">
@@ -1570,7 +1837,7 @@ export default function App() {
                             setScreenMode(mode as any);
                             setShowScreenModeMenu(false);
                           }}
-                          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest text-left rounded-xl transition-all ${
+                          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest text-left rounded-xl transition-all cursor-pointer ${
                             screenMode === mode 
                             ? 'bg-blue-600 text-white' 
                             : 'text-slate-400 hover:bg-slate-800 hover:text-white'
@@ -1584,410 +1851,475 @@ export default function App() {
                 </AnimatePresence>
               </div>
             </div>
-            <div className="flex flex-col">
-              <h1 className="hidden sm:block text-xs md:text-sm font-bold text-slate-100 uppercase tracking-widest leading-none mb-1">Artificial General Intelligence Directory</h1>
-              <div className="flex items-center flex-wrap gap-1.5 sm:gap-2.5">
-                {/* Sync Status Badge */}
-                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider font-mono border ${
-                  syncStatus === 'live' 
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'live' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
-                  Sync: {syncStatus === 'live' ? 'Live' : 'Offline'}
-                </span>
 
-                {/* Force Refresh Button */}
-                <button
-                  onClick={handleForceRefresh}
-                  disabled={refreshing}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50"
-                  title="Force refresh data directly from Firestore server"
-                >
-                  <Zap className={`w-3 h-3 text-amber-500 ${refreshing ? 'animate-spin' : ''}`} />
-                  {refreshing ? 'Refreshed' : 'Force Refresh'}
-                </button>
-
-                {/* Debug Indexing / Seed Button */}
-                <button
-                  onClick={handleDebugIndexing}
-                  disabled={indexingStatus === 'indexing'}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50"
-                  title="Seed premium tools if directory is empty"
-                >
-                  <Database className="w-3 h-3 text-blue-500" />
-                  {indexingStatus === 'indexing' ? 'Indexing...' : 'Debug Indexing'}
-                </button>
-              </div>
-            </div>
+            {/* Post a Blog/Article Quick Button */}
+            {user ? (
+              <motion.button
+                whileHover={{ scale: 1.05, boxShadow: "0 0 12px rgba(245, 158, 11, 0.2)" }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowArticleSubmit(true)}
+                className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black rounded-lg font-black text-[9px] sm:text-[10px] uppercase tracking-wider transition-all border border-amber-400/20 cursor-pointer shadow-lg shadow-amber-500/10"
+              >
+                <Plus className="w-3 h-3 text-black" />
+                Post a Blog/Article
+              </motion.button>
+            ) : (
+              <motion.button
+                whileHover={{ scale: 1.05, backgroundColor: "rgba(30, 41, 59, 0.9)" }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setAuthMode('signin')}
+                className="flex items-center gap-1 px-2.5 py-1 bg-slate-900 border border-slate-800 text-slate-300 rounded-lg font-black text-[9px] sm:text-[10px] uppercase tracking-wider transition-all cursor-pointer hover:text-white"
+              >
+                <LogIn className="w-3 h-3 text-blue-500" />
+                Post a Blog/Article
+              </motion.button>
+            )}
           </div>
 
-            <div className="flex items-center gap-4">
-              {user ? (
-                <div className="flex items-center gap-1.5 sm:gap-2 relative">
-                  {/* Article Trigger Button */}
-                  <div className="relative group flex flex-col items-center">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setShowArticlesList(true)}
-                      className="mb-1 bg-white text-blue-600 text-[8px] font-black uppercase px-3 py-1 rounded shadow-lg border border-blue-400/30 transition-all hover:scale-105"
-                    >
-                      SEE BLOGS
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setIsArticleMenuOpen(!isArticleMenuOpen)}
-                      className={`p-2 sm:p-2.5 rounded-xl border transition-all shadow-lg ${
-                        isArticleMenuOpen 
-                        ? 'bg-red-500 text-white border-red-400' 
-                        : 'bg-red-600/10 text-red-500 border-red-500/20 hover:bg-red-500 hover:text-white'
-                      }`}
-                      aria-label="Article menu"
-                    >
-                      <BookOpen className="w-4 h-4 sm:w-5 h-5" />
-                    </motion.button>
-                    
-                    <div className="hidden sm:flex mt-1 flex-col items-center pointer-events-none">
-                      <span className="text-[6px] font-black text-red-500/80 leading-none uppercase tracking-tighter text-center">
-                        Read a Blog
-                      </span>
-                      <span className="text-[5px] font-black text-slate-600 leading-none uppercase tracking-tighter text-center my-0.5">
-                        or
-                      </span>
-                      <span className="text-[6px] font-black text-blue-500/80 leading-none uppercase tracking-tighter text-center">
-                        Post Something
-                      </span>
+          {/* Scrollable Track Wrapper with Arrow Nav and Fade Gradients */}
+          <div className="flex-1 relative overflow-hidden h-full flex items-center">
+            
+            {/* Scroll indicators (Fade overlays) */}
+            <AnimatePresence>
+              {showLeftArrow && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-slate-950 via-slate-950/70 to-transparent z-20 pointer-events-none flex items-center justify-start pl-1"
+                >
+                  <button
+                    onClick={() => scrollHeader('left')}
+                    className="p-1.5 rounded-full bg-slate-900/95 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white transition-all shadow-lg pointer-events-auto cursor-pointer"
+                    title="Scroll Left"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-blue-400" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {showRightArrow && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-slate-950 via-slate-950/70 to-transparent z-20 pointer-events-none flex items-center justify-end pr-1"
+                >
+                  <button
+                    onClick={() => scrollHeader('right')}
+                    className="p-1.5 rounded-full bg-slate-900/95 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white transition-all shadow-lg pointer-events-auto cursor-pointer"
+                    title="Scroll Right"
+                  >
+                    <ChevronRight className="w-4 h-4 text-blue-400" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Scrollable Container (Grabbable / Scrollable) */}
+            <div
+              ref={headerScrollRef}
+              onScroll={updateScrollArrows}
+              onMouseDown={handleHeaderMouseDown}
+              onMouseMove={handleHeaderMouseMove}
+              onMouseUp={handleHeaderMouseUpOrLeave}
+              onMouseLeave={handleHeaderMouseUpOrLeave}
+              className={`w-full h-full flex items-center justify-between gap-6 overflow-x-auto scrollbar-none scroll-smooth select-none px-4 ${
+                isHeaderDragging ? 'cursor-grabbing' : 'cursor-grab'
+              }`}
+            >
+              {/* Badge & Title Column */}
+              <div className="flex flex-col shrink-0 text-left">
+                <h1 className="hidden sm:block text-xs md:text-sm font-bold text-slate-100 uppercase tracking-widest leading-none mb-1 whitespace-nowrap">Artificial General Intelligence Directory</h1>
+                <div className="flex items-center flex-nowrap gap-1.5 sm:gap-2.5">
+                  {/* Sync Status Badge */}
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider font-mono border whitespace-nowrap ${
+                    syncStatus === 'live' 
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'live' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+                    Sync: {syncStatus === 'live' ? 'Live' : 'Offline'}
+                  </span>
+
+                  {/* Force Refresh Button */}
+                  <button
+                    onClick={handleForceRefresh}
+                    disabled={refreshing}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50 whitespace-nowrap cursor-pointer"
+                    title="Force refresh data directly from Firestore server"
+                  >
+                    <Zap className={`w-3 h-3 text-amber-500 ${refreshing ? 'animate-spin' : ''}`} />
+                    {refreshing ? 'Refreshed' : 'Force Refresh'}
+                  </button>
+
+                  {/* Debug Indexing / Seed Button */}
+                  <button
+                    onClick={handleDebugIndexing}
+                    disabled={indexingStatus === 'indexing'}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50 whitespace-nowrap cursor-pointer"
+                    title="Seed premium tools if directory is empty"
+                  >
+                    <Database className="w-3 h-3 text-blue-500" />
+                    {indexingStatus === 'indexing' ? 'Indexing...' : 'Debug Indexing'}
+                  </button>
+                </div>
+              </div>
+
+              {/* All Right-side Action Buttons */}
+              <div className="flex items-center gap-4 shrink-0 pr-6">
+                {user ? (
+                  <div className="flex items-center gap-1.5 sm:gap-2 relative shrink-0">
+                    {/* Article Trigger Button */}
+                    <div className="relative group flex flex-col items-center shrink-0">
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setShowArticlesList(true)}
+                        className="mb-1 bg-white text-blue-600 text-[8px] font-black uppercase px-3 py-1 rounded shadow-lg border border-blue-400/30 transition-all hover:scale-105 cursor-pointer"
+                      >
+                        SEE BLOGS
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setIsArticleMenuOpen(!isArticleMenuOpen)}
+                        className={`p-2 sm:p-2.5 rounded-xl border transition-all shadow-lg cursor-pointer ${
+                          isArticleMenuOpen 
+                          ? 'bg-red-500 text-white border-red-400' 
+                          : 'bg-red-600/10 text-red-500 border-red-500/20 hover:bg-red-500 hover:text-white'
+                        }`}
+                        aria-label="Article menu"
+                      >
+                        <BookOpen className="w-4 h-4 sm:w-5 h-5" />
+                      </motion.button>
+                      
+                      <div className="hidden sm:flex mt-1 flex-col items-center pointer-events-none">
+                        <span className="text-[6px] font-black text-red-500/80 leading-none uppercase tracking-tighter text-center">
+                          Read a Blog
+                        </span>
+                        <span className="text-[5px] font-black text-slate-600 leading-none uppercase tracking-tighter text-center my-0.5">
+                          or
+                        </span>
+                        <span className="text-[6px] font-black text-blue-500/80 leading-none uppercase tracking-tighter text-center">
+                          Post Something
+                        </span>
+                      </div>
+
+                      <AnimatePresence>
+                        {isArticleMenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute right-0 top-full mt-3 flex flex-col gap-2 z-[60] p-2 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl min-w-[200px]"
+                          >
+                            <div className="px-4 py-2 border-b border-white/5 mb-1">
+                               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Blogger Portal</p>
+                               <p className="text-[8px] text-slate-600 text-center uppercase mt-1">Read a Blog or Post Something</p>
+                            </div>
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => {
+                                setShowArticlesList(true);
+                                setIsArticleMenuOpen(false);
+                              }}
+                              className="whitespace-nowrap px-4 py-2.5 bg-green-600 hover:bg-green-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-green-600/20 border border-green-400/20 flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              Read A Blog
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => {
+                                setShowArticleSubmit(true);
+                                setIsArticleMenuOpen(false);
+                              }}
+                              className="whitespace-nowrap px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-amber-500/20 border border-amber-400/20 flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Post Something
+                            </motion.button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
-                    <AnimatePresence>
-                      {isArticleMenuOpen && (
+                    <div className="flex flex-col items-center shrink-0">
+                      <div className="flex flex-col items-center -mb-1 relative z-10">
+                        {userRole !== "User" && (
+                          <button 
+                            onClick={() => setShowAdminPortal(true)}
+                            className="bg-blue-600 hover:bg-blue-500 text-white text-[7px] font-black uppercase px-2 py-0.5 rounded shadow-lg border border-blue-400/30 transition-all hover:scale-105 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Shield className="w-2 h-2" />
+                            Admin Portal
+                          </button>
+                        )}
+                        <span className="text-[6px] font-black text-blue-500/80 tracking-[0.2em] uppercase mt-0.5 whitespace-nowrap bg-slate-950/80 px-1 rounded">
+                           {userRole}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => setShowProfile(true)}
+                        className="flex items-center gap-2 sm:gap-3 p-1 pr-2 sm:pr-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-2xl transition-all group cursor-pointer"
+                      >
+                        <img 
+                          src={user.photoURL || null} 
+                          alt={user.displayName || ""} 
+                          className="w-8 h-8 sm:w-10 h-10 rounded-xl border border-slate-800 shadow-xl group-hover:scale-95 transition-transform"
+                          loading="lazy"
+                          decoding="async"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="text-left hidden xs:block">
+                          <p className="text-[10px] font-black text-white leading-none uppercase tracking-tighter">Profile</p>
+                          <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{user.displayName?.split(' ')[0]}</p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <button 
+                  onClick={handleExpandDirectory}
+                  disabled={isScraping}
+                  className={`flex items-center gap-2 px-5 py-2.5 transition-all text-sm font-bold border rounded-xl shadow-lg ring-1 shrink-0 cursor-pointer ${
+                    isScraping 
+                    ? 'bg-blue-600/20 text-blue-400 border-blue-500/30 ring-blue-500/20 cursor-wait' 
+                    : 'bg-slate-900 text-slate-100 border-slate-800 ring-slate-700/10 hover:bg-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <Zap className={`w-4 h-4 ${isScraping ? 'animate-pulse text-blue-400' : 'text-blue-500'}`} />
+                  {isScraping ? 'INDEXING_CORE_MODELS...' : 'Index Popular AIs'}
+                </button>
+
+                {/* Live Social Activity Feed Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowSocialFeed(!showSocialFeed)}
+                  className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 shadow-lg group cursor-pointer shrink-0 ${
+                    showSocialFeed 
+                    ? 'bg-emerald-500 text-white border-emerald-400' 
+                    : 'bg-emerald-600/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
+                  }`}
+                  title="Toggle Live Activity Feed"
+                >
+                  <Radio className={`w-4 h-4 ${showSocialFeed ? 'text-white' : 'text-emerald-400'} animate-pulse`} />
+                  <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Live Feed</span>
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                  </span>
+                </motion.button>
+
+                {/* Language Switcher Quick-Toggle */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    const langs: Language[] = ["en", "es", "fr", "de"];
+                    const idx = langs.indexOf(language);
+                    const nextLang = langs[(idx + 1) % langs.length];
+                    handleLanguageChange(nextLang);
+                  }}
+                  className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-all flex items-center gap-1.5 shadow-lg group cursor-pointer shrink-0"
+                  title="Toggle Language / Cambiar Idioma"
+                >
+                  <Globe className="w-4 h-4 text-blue-400 group-hover:rotate-12 transition-transform duration-300" />
+                  <span className="uppercase text-[10px] font-black">{language}</span>
+                </motion.button>
+
+                {/* Persistent Settings Panel */}
+                <div className="relative shrink-0">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                    className={`p-2.5 rounded-xl border transition-all flex items-center justify-center relative shadow-lg group cursor-pointer ${
+                      showSettingsMenu 
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-400' 
+                        : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                    }`}
+                    title="Application Settings"
+                  >
+                    <Settings className="w-5 h-5 transition-transform duration-300 group-hover:rotate-45" />
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {showSettingsMenu && (
+                      <>
+                        {/* Backdrop to close settings when clicking outside */}
+                        <div 
+                          className="fixed inset-0 z-40 cursor-default" 
+                          onClick={() => setShowSettingsMenu(false)} 
+                        />
                         <motion.div
                           initial={{ opacity: 0, y: 10, scale: 0.95 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          className="absolute right-0 top-full mt-3 flex flex-col gap-2 z-[60] p-2 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl min-w-[200px]"
+                          transition={{ duration: 0.15 }}
+                          className="absolute right-0 top-full mt-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl z-50 min-w-[280px] backdrop-blur-xl"
                         >
-                          <div className="px-4 py-2 border-b border-white/5 mb-1">
-                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Blogger Portal</p>
-                             <p className="text-[8px] text-slate-600 text-center uppercase mt-1">Read a Blog or Post Something</p>
+                          <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-800">
+                            <Settings className="w-4 h-4 text-blue-400 animate-spin-slow" />
+                            <h3 className="text-xs font-black uppercase tracking-widest text-white">App Settings</h3>
                           </div>
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => {
-                              setShowArticlesList(true);
-                              setIsArticleMenuOpen(false);
-                            }}
-                            className="whitespace-nowrap px-4 py-2.5 bg-green-600 hover:bg-green-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-green-600/20 border border-green-400/20 flex items-center justify-center gap-2"
-                          >
-                            <BookOpen className="w-3.5 h-3.5" />
-                            Read A Blog
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => {
-                              setShowArticleSubmit(true);
-                              setIsArticleMenuOpen(false);
-                            }}
-                            className="whitespace-nowrap px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-amber-500/20 border border-amber-400/20 flex items-center justify-center gap-2"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            Post Something
-                          </motion.button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
 
-                  <div className="flex flex-col items-center">
-                    <div className="flex flex-col items-center -mb-1 relative z-10">
-                      {userRole !== "User" && (
-                        <button 
-                          onClick={() => setShowAdminPortal(true)}
-                          className="bg-blue-600 hover:bg-blue-500 text-white text-[7px] font-black uppercase px-2 py-0.5 rounded shadow-lg border border-blue-400/30 transition-all hover:scale-105 flex items-center gap-1"
-                        >
-                          <Shield className="w-2 h-2" />
-                          Admin Portal
-                        </button>
-                      )}
-                      <span className="text-[6px] font-black text-blue-500/80 tracking-[0.2em] uppercase mt-0.5 whitespace-nowrap bg-slate-950/80 px-1 rounded">
-                         {userRole}
-                      </span>
-                    </div>
-                    <button 
-                      onClick={() => setShowProfile(true)}
-                      className="flex items-center gap-2 sm:gap-3 p-1 pr-2 sm:pr-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-2xl transition-all group"
-                    >
-                      <img 
-                        src={user.photoURL || null} 
-                        alt={user.displayName || ""} 
-                        className="w-8 h-8 sm:w-10 h-10 rounded-xl border border-slate-800 shadow-xl group-hover:scale-95 transition-transform"
-                        loading="lazy"
-                        decoding="async"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="text-left hidden xs:block">
-                        <p className="text-[10px] font-black text-white leading-none uppercase tracking-tighter">Profile</p>
-                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{user.displayName?.split(' ')[0]}</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => setAuthMode('signin')}
-                    className="hidden xs:flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs border border-slate-800 transition-all shadow-xl group"
-                  >
-                    <LogIn className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-transform" />
-                    Sign In
-                  </button>
-                  <button 
-                    onClick={() => setAuthMode('signup')}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs transition-all shadow-xl"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Sign Up
-                  </button>
-                </div>
-              )}
+                          <div className="space-y-4">
+                            {/* Interactive Sound Experience Setting */}
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                                  {soundPreference === "enabled" ? (
+                                    <Volume2 className="w-4 h-4 text-blue-400 animate-bounce" />
+                                  ) : (
+                                    <VolumeX className="w-4 h-4 text-slate-500" />
+                                  )}
+                                  Sound FX
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const newPref = soundPreference === "enabled" ? "disabled" : "enabled";
+                                    setSoundPreference(newPref);
+                                    localStorage.setItem("sound_preference", newPref);
+                                    if (newPref === "enabled") {
+                                      playRandomInteractiveSound();
+                                    }
+                                  }}
+                                  className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
+                                    soundPreference === "enabled" ? "bg-blue-600" : "bg-slate-800"
+                                  }`}
+                                >
+                                  <span
+                                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                      soundPreference === "enabled" ? "translate-x-5" : "translate-x-1"
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide leading-relaxed">
+                                Play soundscapes on every interface click & interactive action.
+                              </p>
+                            </div>
 
-            <button 
-              onClick={handleExpandDirectory}
-              disabled={isScraping}
-              className={`hidden lg:flex items-center gap-2 px-5 py-2.5 transition-all text-sm font-bold border rounded-xl shadow-lg ring-1 ${
-                isScraping 
-                ? 'bg-blue-600/20 text-blue-400 border-blue-500/30 ring-blue-500/20 cursor-wait' 
-                : 'bg-slate-900 text-slate-100 border-slate-800 ring-slate-700/10 hover:bg-slate-800 hover:border-slate-700'
-              }`}
-            >
-              <Zap className={`w-4 h-4 ${isScraping ? 'animate-pulse text-blue-400' : 'text-blue-500'}`} />
-              {isScraping ? 'INDEXING_CORE_MODELS...' : 'Index Popular AIs'}
-            </button>
+                            {/* Display Language Section */}
+                            <div className="pt-2 border-t border-slate-800 flex flex-col gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                                <Globe className="w-4 h-4 text-blue-400" />
+                                Display Language
+                              </span>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {(["en", "es", "fr", "de"] as Language[]).map((lang) => (
+                                  <button
+                                    key={lang}
+                                    type="button"
+                                    onClick={() => handleLanguageChange(lang)}
+                                    className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer ${
+                                      language === lang
+                                        ? "bg-blue-600/20 text-blue-400 border border-blue-500/30 font-black"
+                                        : "bg-slate-900/40 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white"
+                                    }`}
+                                  >
+                                    {lang === "en" ? "English" : lang === "es" ? "Español" : lang === "fr" ? "Français" : "Deutsch"}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
 
-            {/* Live Social Activity Feed Button */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowSocialFeed(!showSocialFeed)}
-              className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 shadow-lg group cursor-pointer ${
-                showSocialFeed 
-                ? 'bg-emerald-500 text-white border-emerald-400' 
-                : 'bg-emerald-600/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
-              }`}
-              title="Toggle Live Activity Feed"
-            >
-              <Radio className={`w-4 h-4 ${showSocialFeed ? 'text-white' : 'text-emerald-400'} animate-pulse`} />
-              <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Live Feed</span>
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-              </span>
-            </motion.button>
-
-            {/* Language Switcher Quick-Toggle */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                const langs: Language[] = ["en", "es", "fr", "de"];
-                const idx = langs.indexOf(language);
-                const nextLang = langs[(idx + 1) % langs.length];
-                handleLanguageChange(nextLang);
-              }}
-              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-all flex items-center gap-1.5 shadow-lg group cursor-pointer"
-              title="Toggle Language / Cambiar Idioma"
-            >
-              <Globe className="w-4 h-4 text-blue-400 group-hover:rotate-12 transition-transform duration-300" />
-              <span className="uppercase text-[10px] font-black">{language}</span>
-            </motion.button>
-
-            {/* Persistent Settings Panel */}
-            <div className="relative">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-                className={`p-2.5 rounded-xl border transition-all flex items-center justify-center relative shadow-lg group cursor-pointer ${
-                  showSettingsMenu 
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-400' 
-                    : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
-                }`}
-                title="Application Settings"
-              >
-                <Settings className="w-5 h-5 transition-transform duration-300 group-hover:rotate-45" />
-              </motion.button>
-
-              <AnimatePresence>
-                {showSettingsMenu && (
-                  <>
-                    {/* Backdrop to close settings when clicking outside */}
-                    <div 
-                      className="fixed inset-0 z-40 cursor-default" 
-                      onClick={() => setShowSettingsMenu(false)} 
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full mt-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl z-50 min-w-[280px] backdrop-blur-xl"
-                    >
-                      <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-800">
-                        <Settings className="w-4 h-4 text-blue-400 animate-spin-slow" />
-                        <h3 className="text-xs font-black uppercase tracking-widest text-white">App Settings</h3>
-                      </div>
-
-                      <div className="space-y-4">
-                        {/* Interactive Sound Experience Setting */}
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                              {soundPreference === "enabled" ? (
-                                <Volume2 className="w-4 h-4 text-blue-400 animate-bounce" />
-                              ) : (
-                                <VolumeX className="w-4 h-4 text-slate-500" />
-                              )}
-                              Sound FX
-                            </span>
+                            {/* Test Soundscape Button */}
                             <button
-                              onClick={() => {
-                                const newPref = soundPreference === "enabled" ? "disabled" : "enabled";
-                                setSoundPreference(newPref);
-                                localStorage.setItem("sound_preference", newPref);
-                                if (newPref === "enabled") {
-                                  playRandomInteractiveSound();
-                                }
-                              }}
-                              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
-                                soundPreference === "enabled" ? "bg-blue-600" : "bg-slate-800"
-                              }`}
+                              onClick={() => playRandomInteractiveSound()}
+                              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer"
                             >
-                              <span
-                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                                  soundPreference === "enabled" ? "translate-x-5" : "translate-x-1"
-                                }`}
-                              />
+                              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                              Test Synthesized FX
                             </button>
+
+                            {/* Informational System Config */}
+                            <div className="pt-2 border-t border-slate-800 text-[8px] font-mono text-slate-500 flex justify-between items-center">
+                              <span>AUDIO_ENGINE:</span>
+                              <span className={soundPreference === "enabled" ? "text-emerald-400" : "text-rose-500"}>
+                                {soundPreference === "enabled" ? "ONLINE" : "MUTED"}
+                              </span>
+                            </div>
                           </div>
-                          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide leading-relaxed">
-                            Play soundscapes on every interface click & interactive action.
-                          </p>
-                        </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
 
-                        {/* Display Language Section */}
-                        <div className="pt-2 border-t border-slate-800 flex flex-col gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                            <Globe className="w-4 h-4 text-blue-400" />
-                            Display Language
-                          </span>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {(["en", "es", "fr", "de"] as Language[]).map((lang) => (
-                              <button
-                                key={lang}
-                                type="button"
-                                onClick={() => handleLanguageChange(lang)}
-                                className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer ${
-                                  language === lang
-                                    ? "bg-blue-600/20 text-blue-400 border border-blue-500/30 font-black"
-                                    : "bg-slate-900/40 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white"
-                                }`}
-                              >
-                                {lang === "en" ? "English" : lang === "es" ? "Español" : lang === "fr" ? "Français" : "Deutsch"}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Test Soundscape Button */}
-                        <button
-                          onClick={() => playRandomInteractiveSound()}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-[9px] font-black uppercase tracking-wider text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                          Test Synthesized FX
-                        </button>
-
-                        {/* Informational System Config */}
-                        <div className="pt-2 border-t border-slate-800 text-[8px] font-mono text-slate-500 flex justify-between items-center">
-                          <span>AUDIO_ENGINE:</span>
-                          <span className={soundPreference === "enabled" ? "text-emerald-400" : "text-rose-500"}>
-                            {soundPreference === "enabled" ? "ONLINE" : "MUTED"}
-                          </span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Enhanced Theme Toggle */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-all flex items-center justify-center relative overflow-hidden shadow-lg group cursor-pointer"
-              title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            >
-              <AnimatePresence mode="wait">
-                {theme === 'dark' ? (
-                  <motion.div
-                    key="dark"
-                    initial={{ y: -10, opacity: 0, rotate: -45 }}
-                    animate={{ y: 0, opacity: 1, rotate: 0 }}
-                    exit={{ y: 10, opacity: 0, rotate: 45 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="flex items-center justify-center text-amber-400"
-                  >
-                    <Moon className="w-5 h-5 fill-current" />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="light"
-                    initial={{ y: -10, opacity: 0, rotate: -45 }}
-                    animate={{ y: 0, opacity: 1, rotate: 0 }}
-                    exit={{ y: 10, opacity: 0, rotate: 45 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="flex items-center justify-center text-orange-500"
-                  >
-                    <Sun className="w-5 h-5 fill-current" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.button>
-
-            {/* Compare Shortcut Badge */}
-            <AnimatePresence>
-              {comparedTools.length > 0 && (
+                {/* Enhanced Theme Toggle */}
                 <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowComparisonModal(true)}
-                  className="relative p-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(249,115,22,0.25)]"
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-all flex items-center justify-center relative overflow-hidden shadow-lg group cursor-pointer shrink-0"
+                  title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
                 >
-                  <ArrowLeftRight className="w-4 h-4" />
-                  <span className="hidden sm:inline">Compare</span>
-                  <span className="bg-orange-500 text-slate-950 font-black rounded-full w-4.5 h-4.5 flex items-center justify-center text-[9px] -mr-1">{comparedTools.length}</span>
+                  <AnimatePresence mode="wait">
+                    {theme === 'dark' ? (
+                      <motion.div
+                        key="dark"
+                        initial={{ y: -10, opacity: 0, rotate: -45 }}
+                        animate={{ y: 0, opacity: 1, rotate: 0 }}
+                        exit={{ y: 10, opacity: 0, rotate: 45 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="flex items-center justify-center text-amber-400"
+                      >
+                        <Moon className="w-5 h-5 fill-current" />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="light"
+                        initial={{ y: -10, opacity: 0, rotate: -45 }}
+                        animate={{ y: 0, opacity: 1, rotate: 0 }}
+                        exit={{ y: 10, opacity: 0, rotate: 45 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="flex items-center justify-center text-orange-500"
+                      >
+                        <Sun className="w-5 h-5 fill-current" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.button>
-              )}
-            </AnimatePresence>
 
-            <motion.a 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              href="#submit-section"
-              className="px-3 sm:px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-bold text-[10px] sm:text-sm transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2 border border-blue-400/20"
-            >
-              <Plus className="w-4 h-4 sm:w-5 h-5" />
-              <span>Contribute</span>
-            </motion.a>
+                {/* Compare Shortcut Badge */}
+                <AnimatePresence>
+                  {comparedTools.length > 0 && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowComparisonModal(true)}
+                      className="relative p-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(249,115,22,0.25)] shrink-0"
+                    >
+                      <ArrowLeftRight className="w-4 h-4" />
+                      <span className="hidden sm:inline">Compare</span>
+                      <span className="bg-orange-500 text-slate-950 font-black rounded-full w-4.5 h-4.5 flex items-center justify-center text-[9px] -mr-1">{comparedTools.length}</span>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+
+                <motion.a 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  href="#submit-section"
+                  className="px-3 sm:px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-bold text-[10px] sm:text-sm transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2 border border-blue-400/20 shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 sm:w-5 h-5" />
+                  <span>Contribute</span>
+                </motion.a>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -2013,6 +2345,51 @@ export default function App() {
             >
               {/* Realistic 3D Blazing Fire with Smoke */}
               <BlazingFire />
+
+              {/* Flame-aligned Interactive Gateway */}
+              <div className="max-w-2xl mx-auto mb-10 mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 p-4 rounded-3xl shadow-2xl">
+                {!user ? (
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                    <motion.button
+                      whileHover={{ scale: 1.05, backgroundColor: "rgba(30, 41, 59, 0.9)" }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setAuthMode('signin')}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-slate-950 border border-slate-800 text-white rounded-2xl font-black text-sm transition-all cursor-pointer shadow-xl group hover:border-blue-500/30"
+                    >
+                      <LogIn className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-transform" />
+                      Sign In
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setAuthMode('signup')}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm transition-all cursor-pointer shadow-xl shadow-blue-600/10"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Sign Up
+                    </motion.button>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 font-bold uppercase tracking-wider px-4 py-2 bg-slate-950/40 rounded-full border border-slate-800/60">
+                    Logged in as <span className="text-white font-black">{user.displayName || user.email}</span>
+                  </div>
+                )}
+
+                <div className="hidden sm:block w-px h-6 bg-slate-800" />
+
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: "0 0 15px rgba(239, 68, 68, 0.2)" }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowArticlesList(true)}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white rounded-2xl font-black text-sm transition-all cursor-pointer shadow-xl shadow-red-900/10 border border-red-500/30"
+                >
+                  <BookOpen className="w-4 h-4 animate-pulse text-yellow-300" />
+                  Read Blogs & Articles
+                  <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded-md font-black uppercase tracking-widest ml-1 animate-pulse">
+                    FREE
+                  </span>
+                </motion.button>
+              </div>
 
               <span className="px-4 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-full border border-blue-500/20 mb-6 inline-block">
                 {language === "en" ? "The Definitive AI Roadmap" : language === "es" ? "La Ruta Definitiva de IA" : language === "fr" ? "La Feuille de Route IA Définitive" : "Der definitive KI-Wegweiser"}
@@ -2139,10 +2516,19 @@ export default function App() {
                       
                       if (completion && completion.toLowerCase().startsWith(searchLower)) {
                          return (
-                          <div className="absolute left-14 top-1/2 -translate-y-1/2 text-slate-950 pointer-events-none font-semibold whitespace-pre">
+                          <div 
+                            onClick={() => {
+                              setSearchQuery(completion);
+                              setFocusedSuggestionIndex(0);
+                            }}
+                            className="absolute left-14 top-1/2 -translate-y-1/2 text-slate-950 cursor-pointer font-semibold whitespace-pre z-30 pointer-events-auto select-none"
+                            title="Click or press Tab to autocomplete"
+                          >
                             <span className="opacity-0">{searchQuery}</span>
                             <span className="opacity-45">{completion.substring(searchQuery.length)}</span>
-                            <span className="ml-2 text-[8px] bg-slate-950 text-yellow-400 px-1.5 py-0.5 rounded border border-slate-900 font-black uppercase tracking-tighter shadow-sm animate-pulse">Tab to Complete</span>
+                            <span className="ml-2 text-[8px] bg-slate-950 text-yellow-400 px-1.5 py-0.5 rounded border border-slate-900 font-black uppercase tracking-tighter shadow-sm animate-pulse hover:bg-slate-900">
+                              Tab / Tap to Complete
+                            </span>
                           </div>
                         );
                       }
@@ -2180,7 +2566,13 @@ export default function App() {
 
                   {/* Search Footer Tips */}
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-3 z-20">
-                    <VoiceSearch onResult={(text) => { handleSearchChange(text); addRecentSearch(text); }} />
+                    <VoiceSearch onResult={(text) => {
+                      const isCommand = handleVoiceCommand(text);
+                      if (!isCommand) {
+                        handleSearchChange(text);
+                        addRecentSearch(text);
+                      }
+                    }} />
                     <div className="flex gap-1">
                       <kbd className="px-1.5 py-0.5 bg-slate-950 border border-slate-900 rounded text-[9px] text-yellow-400 font-mono">#</kbd>
                       <span className="text-[9px] text-slate-900 font-black uppercase tracking-tighter">to search tags</span>
@@ -2256,6 +2648,54 @@ export default function App() {
                           </div>
 
                           <div className="flex-1">
+                            {(() => {
+                              const searchVal = searchQuery.toLowerCase().trim().replace('#', '');
+                              const matchingCategories = CATEGORIES.filter(cat => 
+                                cat.toLowerCase().includes(searchVal) &&
+                                cat.toLowerCase() !== selectedCategory.toLowerCase()
+                              );
+                              
+                              const matchingTags = popularTags
+                                .map(([tag]) => tag)
+                                .filter(tag => tag.toLowerCase().includes(searchVal))
+                                .slice(0, 5);
+
+                              if (matchingCategories.length === 0 && matchingTags.length === 0) return null;
+
+                              return (
+                                <div className="p-4 bg-slate-950/40 border-b border-white/5 flex flex-wrap items-center gap-2">
+                                  <span className="text-[9px] text-slate-500 font-black uppercase tracking-wider">Quick Complete:</span>
+                                  {matchingCategories.map(cat => (
+                                    <button
+                                      key={cat}
+                                      onClick={() => {
+                                        setSelectedCategory(cat);
+                                        setSearchQuery("");
+                                        setShowSuggestions(false);
+                                      }}
+                                      className="px-2 py-1 bg-slate-900 hover:bg-orange-500/20 hover:text-orange-300 border border-white/5 rounded-lg text-[10px] font-bold text-slate-300 transition-all flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                      Category: {cat}
+                                    </button>
+                                  ))}
+                                  {matchingTags.map(tag => (
+                                    <button
+                                      key={tag}
+                                      onClick={() => {
+                                        setSearchQuery(`#${tag}`);
+                                        setShowSuggestions(false);
+                                      }}
+                                      className="px-2 py-1 bg-slate-900 hover:bg-blue-500/20 hover:text-blue-300 border border-white/5 rounded-lg text-[10px] font-bold text-slate-300 transition-all flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <span>#</span>
+                                      {tag}
+                                    </button>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+
                             {Object.entries(groupedSuggestions).map(([category, items]) => (
                               <div key={category} className="border-b border-white/5 last:border-none">
                                 {/* Category Sub-header */}
@@ -2716,6 +3156,21 @@ export default function App() {
           </section>
         )}
 
+        {/* Recommended For You Section */}
+        {!loading && !searchQuery && selectedCategory === "All" && selectedType === "All" && !showFavoritesOnly && (
+          <RecommendedForYou
+            allTools={tools}
+            favorites={favorites}
+            comparedTools={comparedTools}
+            onCompareToggle={toggleCompareTool}
+            onView={(tool) => setSelectedTool(tool)}
+            onEdit={handleEditTool}
+            onDelete={setToolToDelete}
+            onShare={handleShareTool}
+            isAdmin={userRole !== "User"}
+          />
+        )}
+
         {/* Main Grid */}
         <section className="py-20 max-w-7xl mx-auto px-6">
           <AnimatePresence>
@@ -3018,7 +3473,7 @@ export default function App() {
               className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
               {/* Modal Header */}
-              <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 backdrop-blur-xl sticky top-0 z-10">
+              <div className="p-6 border-b border-slate-800 flex flex-col xs:flex-row xs:items-center justify-between gap-4 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-10">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center overflow-hidden border border-white/10 shadow-inner">
                     <img 
@@ -3035,12 +3490,20 @@ export default function App() {
                     <p className="text-xs text-blue-400 font-mono font-bold tracking-tighter uppercase">{selectedTool.category}</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => { setSelectedTool(null); setIsEditing(false); }}
-                  className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+                <div className="flex items-center gap-2 self-end xs:self-auto">
+                  <SocialShare 
+                    url={`https://www.agidappglobal.com/share/${selectedTool.id}`} 
+                    title={selectedTool.name} 
+                    text={selectedTool.desc}
+                    variant="minimal"
+                  />
+                  <button 
+                    onClick={() => { setSelectedTool(null); setIsEditing(false); setShowSharePanel(false); }}
+                    className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
 
               {/* Modal Content */}
@@ -3296,8 +3759,12 @@ export default function App() {
 
                     <div className="pt-8 border-t border-slate-800 flex flex-wrap gap-4">
                       <button 
-                        onClick={() => handleShareTool(selectedTool)}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-750 transition-all"
+                        onClick={() => setShowSharePanel(!showSharePanel)}
+                        className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all cursor-pointer ${
+                          showSharePanel
+                            ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 border border-blue-500/30"
+                            : "bg-slate-800 text-white hover:bg-slate-750"
+                        }`}
                       >
                         <Share2 className="w-5 h-5" /> Share
                       </button>
@@ -3350,6 +3817,26 @@ export default function App() {
                         <Trash2 className="w-5 h-5" /> Delete
                       </button>
                     </div>
+
+                    {/* Social Share & Feed Preview Panel */}
+                    <AnimatePresence>
+                      {showSharePanel && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden mt-4"
+                        >
+                          <SocialShare 
+                            url={`https://www.agidappglobal.com/share/${selectedTool.id}`} 
+                            title={selectedTool.name} 
+                            text={selectedTool.desc}
+                            image={selectedTool.mediaFiles?.[0]?.url || `https://www.google.com/s2/favicons?domain=${new URL(selectedTool.url).hostname}&sz=128`}
+                            variant="full"
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     {/* Bookmark Curated Projects Dropdown/Sub-panel */}
                     <AnimatePresence>
@@ -3491,7 +3978,7 @@ export default function App() {
                       )}
                     </AnimatePresence>
 
-                    <CommentSection id={selectedTool.id} type="tool" isAdmin={userRole !== "User"} />
+                    <CommentSection id={selectedTool.id} type="tool" isAdmin={userRole !== "User"} authorId={selectedTool.authorId} />
 
                     <RelatedTools 
                       currentTool={selectedTool}
@@ -3528,6 +4015,10 @@ export default function App() {
             onEditTool={(tool) => { setShowProfile(false); handleEditTool(tool); }}
             onDeleteTool={(tool) => { setShowProfile(false); setToolToDelete(tool); }}
             onShareTool={(tool) => { handleShareTool(tool); }}
+            onPostSomething={() => {
+              setShowProfile(false);
+              setShowArticleSubmit(true);
+            }}
           />
         )}
       </AnimatePresence>

@@ -1,11 +1,12 @@
 import * as React from "react";
-import { Send, CheckCircle2, AlertCircle, X, Type, FileText, Image as ImageIcon, Video, Youtube, Link as LinkIcon, Loader2, Sparkles, Wand2, FilePlus, RefreshCcw, Download } from "lucide-react";
+import { Send, CheckCircle2, AlertCircle, X, Type, FileText, Image as ImageIcon, Video, Youtube, Link as LinkIcon, Loader2, Sparkles, Wand2, FilePlus, RefreshCcw, Download, BookOpen, Clock, Heart, Eye, User } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage, handleFirestoreError, OperationType } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { UserRole } from "../types";
+import Markdown from "react-markdown";
 
 interface ArticleSubmitFormProps {
   onClose: () => void;
@@ -31,7 +32,23 @@ export default function ArticleSubmitForm({ onClose, userRole }: ArticleSubmitFo
   const [videoOpName, setVideoOpName] = React.useState<string | null>(null);
   const [videoStatus, setVideoStatus] = React.useState<string>("");
   
+  const [editorMode, setEditorMode] = React.useState<'edit' | 'preview'>('edit');
+  const [socialPreviewPlatform, setSocialPreviewPlatform] = React.useState<'twitter' | 'linkedin'>('twitter');
   const contentLen = formData.content.length;
+
+  const getStats = (content: string) => {
+    const text = content.trim();
+    if (!text) return { words: 0, readTime: "0 min read" };
+    const words = text.split(/\s+/).filter(Boolean).length;
+    const wordsPerMinute = 225;
+    const readTime = Math.ceil(words / wordsPerMinute);
+    return {
+      words,
+      readTime: `${readTime} ${readTime === 1 ? 'min' : 'mins'} read`
+    };
+  };
+
+  const { words, readTime } = getStats(formData.content);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video' | 'document') => {
     if (e.target.files && e.target.files[0]) {
@@ -447,15 +464,47 @@ export default function ArticleSubmitForm({ onClose, userRole }: ArticleSubmitFo
             <div className="flex justify-between items-center px-1">
               <div className="flex items-center gap-4">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Content</label>
-                <div className="flex items-center gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-lg">
-                  <button type="button" onClick={() => insertMarkdown("**", "**")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] font-black rounded border border-transparent hover:border-slate-700" title="Bold">B</button>
-                  <button type="button" onClick={() => insertMarkdown("*", "*")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] italic rounded border border-transparent hover:border-slate-700" title="Italic">I</button>
-                  <button type="button" onClick={() => insertMarkdown("- ")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] rounded border border-transparent hover:border-slate-700" title="List">List</button>
-                  <button type="button" onClick={() => insertMarkdown("`", "`")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] font-mono rounded border border-transparent hover:border-slate-700" title="Code">Code</button>
-                  <button type="button" onClick={() => insertMarkdown("[text](", ")")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] rounded border border-transparent hover:border-slate-700" title="Link">Link</button>
-                  <button type="button" onClick={() => insertMarkdown("![alt](", ")")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] rounded border border-transparent hover:border-slate-700" title="Image">Img</button>
+                
+                {/* Editor Mode Tabs */}
+                <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('edit')}
+                    className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-md transition-all cursor-pointer ${
+                      editorMode === 'edit'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Write
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('preview')}
+                    className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-md transition-all cursor-pointer ${
+                      editorMode === 'preview'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Preview
+                  </button>
                 </div>
+
                 <div className="w-px h-3 bg-slate-800" />
+
+                {editorMode === 'edit' && (
+                  <div className="flex items-center gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-lg">
+                    <button type="button" onClick={() => insertMarkdown("**", "**")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] font-black rounded border border-transparent hover:border-slate-700" title="Bold">B</button>
+                    <button type="button" onClick={() => insertMarkdown("*", "*")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] italic rounded border border-transparent hover:border-slate-700" title="Italic">I</button>
+                    <button type="button" onClick={() => insertMarkdown("- ")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] rounded border border-transparent hover:border-slate-700" title="List">List</button>
+                    <button type="button" onClick={() => insertMarkdown("`", "`")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] font-mono rounded border border-transparent hover:border-slate-700" title="Code">Code</button>
+                    <button type="button" onClick={() => insertMarkdown("[text](", ")")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] rounded border border-transparent hover:border-slate-700" title="Link">Link</button>
+                    <button type="button" onClick={() => insertMarkdown("![alt](", ")")} className="p-1 px-1.5 hover:bg-slate-800 text-slate-400 hover:text-white text-[10px] rounded border border-transparent hover:border-slate-700" title="Image">Img</button>
+                  </div>
+                )}
+                {editorMode === 'edit' && <div className="w-px h-3 bg-slate-800" />}
+
                 <button
                   type="button"
                   onClick={handleWriteWithAi}
@@ -472,19 +521,134 @@ export default function ArticleSubmitForm({ onClose, userRole }: ArticleSubmitFo
                   <input type="file" accept=".pdf,.doc,.docx,.txt,.zip,.xlsx" className="hidden" onChange={(e) => handleFileChange(e, 'document')} />
                 </label>
               </div>
-              <span className={`text-[10px] font-mono ${contentLen > 4000 ? 'text-red-500' : 'text-slate-500'}`}>
-                {contentLen.toLocaleString()} chars
-              </span>
+              <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
+                <span>{words} words</span>
+                <span className="text-slate-800">•</span>
+                <span>{readTime}</span>
+                <span className="text-slate-800">•</span>
+                <span className={contentLen > 4000 ? 'text-red-500' : 'text-slate-500'}>
+                  {contentLen.toLocaleString()} chars
+                </span>
+              </div>
             </div>
-            <textarea
-              ref={textareaRef}
-              required
-              rows={12}
-              placeholder="Start writing your article here... Support markdown for better formatting."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors resize-none placeholder:text-slate-700 text-sm leading-relaxed"
-              value={formData.content}
-              onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
-            />
+            {editorMode === 'edit' ? (
+              <textarea
+                ref={textareaRef}
+                required
+                rows={12}
+                placeholder="Start writing your article here... Support markdown for better formatting."
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors resize-none placeholder:text-slate-700 text-sm leading-relaxed"
+                value={formData.content}
+                onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
+              />
+            ) : (
+              <div className="w-full bg-slate-950 border border-slate-800 rounded-xl px-5 py-4 text-white min-h-[280px] max-h-[350px] overflow-y-auto text-sm leading-relaxed prose prose-invert">
+                {formData.content ? (
+                  <div className="markdown-body">
+                    <Markdown>{formData.content}</Markdown>
+                  </div>
+                ) : (
+                  <p className="text-slate-700 italic">No content to preview yet. Start typing in 'Write' mode!</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Social Share Preview Card Simulator */}
+          <div className="p-5 bg-slate-900/30 rounded-2xl border border-slate-800/80 space-y-4">
+            <div className="flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Social Share Card Preview Mockup</span>
+                <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">See how your link looks on social feeds</span>
+              </div>
+              <div className="flex bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSocialPreviewPlatform('twitter')}
+                  className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-md transition-all cursor-pointer ${
+                    socialPreviewPlatform === 'twitter' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-white'
+                  }`}
+                >
+                  Twitter/X
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSocialPreviewPlatform('linkedin')}
+                  className={`px-2.5 py-1 text-[8px] font-black uppercase rounded-md transition-all cursor-pointer ${
+                    socialPreviewPlatform === 'linkedin' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-white'
+                  }`}
+                >
+                  LinkedIn
+                </button>
+              </div>
+            </div>
+
+            {socialPreviewPlatform === 'twitter' ? (
+              /* Twitter Card Simulation */
+              <div className="border border-slate-800/80 bg-slate-950 rounded-2xl overflow-hidden shadow-2xl max-w-lg mx-auto transition-all">
+                <div className="aspect-[1.91/1] w-full bg-slate-900 flex items-center justify-center relative border-b border-slate-800/80">
+                  {mediaFile && mediaType === 'image' ? (
+                    <img src={URL.createObjectURL(mediaFile)} className="w-full h-full object-cover" alt="Twitter Preview" />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-700">
+                      <ImageIcon className="w-10 h-10 mb-2" />
+                      <span className="text-[9px] font-black uppercase tracking-widest">Featured Social Image</span>
+                    </div>
+                  )}
+                  <span className="absolute bottom-2 left-2 bg-slate-950/85 text-white text-[8px] px-2 py-0.5 rounded font-mono uppercase border border-slate-800">agidappglobal.com</span>
+                </div>
+                <div className="p-4 space-y-1 bg-slate-950">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">AGIDAPP GLOBAL</span>
+                  <h4 className="text-sm font-black text-white line-clamp-1">
+                    {formData.title || "The Unnamed Cosmic AGI Article"}
+                  </h4>
+                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                    {formData.content || "Start writing your article content to populate this social feed card mock snapshot..."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* LinkedIn Card Simulation */
+              <div className="border border-slate-800/80 bg-slate-950 rounded-2xl overflow-hidden shadow-2xl max-w-lg mx-auto transition-all">
+                {/* Post Author info */}
+                <div className="p-4 flex items-center gap-3 bg-slate-950">
+                  <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-700">
+                    {user?.photoURL ? (
+                      <img src={user.photoURL} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                    ) : (
+                      <User className="w-4 h-4 text-slate-500" />
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="text-[11px] font-black text-white leading-none mb-1">{user?.displayName || "Cosmic Developer"}</h5>
+                    <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest leading-none">Writer • Agidapp Global</p>
+                  </div>
+                </div>
+                <div className="px-4 pb-3 bg-slate-950">
+                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                    {formData.content || "Draft content text simulation..."}
+                  </p>
+                </div>
+                <div className="bg-slate-900 border-t border-slate-800">
+                  <div className="aspect-[1.91/1] w-full bg-slate-900 flex items-center justify-center relative">
+                    {mediaFile && mediaType === 'image' ? (
+                      <img src={URL.createObjectURL(mediaFile)} className="w-full h-full object-cover" alt="LinkedIn Preview" />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-slate-700">
+                        <ImageIcon className="w-10 h-10 mb-2" />
+                        <span className="text-[9px] font-black uppercase tracking-widest">Featured Social Image</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 bg-slate-950 border-t border-slate-800 flex justify-between items-center">
+                    <div className="space-y-0.5 max-w-[85%]">
+                      <h4 className="text-[11px] font-black text-white line-clamp-1">{formData.title || "The Unnamed Cosmic AGI Article"}</h4>
+                      <span className="text-[8px] text-slate-500 uppercase tracking-widest font-mono font-bold">agidappglobal.com</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-4 pt-2">

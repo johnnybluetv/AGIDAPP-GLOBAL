@@ -55,8 +55,9 @@ service cloud.firestore {
              data.authorRole in ["Admin", "Manager", "Editor", "User"] &&
              data.status in ["published", "draft"] &&
              (data.get('views', 0) is int) &&
+             (data.get('likesCount', 0) is int) &&
              (data.get('mediaUrl', null) == null || (data.mediaUrl is string && data.mediaUrl.size() <= 1000)) &&
-             (data.get('mediaType', null) == null || data.mediaType in ['image', 'video']) &&
+             (data.get('mediaType', null) == null || data.mediaType in ['image', 'video', 'document']) &&
              (data.get('videoEmbedUrl', null) == null || (data.videoEmbedUrl is string && data.videoEmbedUrl.size() <= 500)) &&
              data.createdAt is timestamp &&
              data.updatedAt is timestamp;
@@ -90,6 +91,10 @@ service cloud.firestore {
                     // Case 1: Incremental View Counter (Public)
                     (incoming().diff(existing()).affectedKeys().hasOnly(['views']) &&
                      incoming().views == (existing().get('views', 0) + 1)) ||
+                    // Case 1b: Incremental Likes Counter (Public)
+                    (incoming().diff(existing()).affectedKeys().hasOnly(['likesCount']) &&
+                     (incoming().likesCount == (existing().get('likesCount', 0) + 1) || 
+                      incoming().likesCount == (existing().get('likesCount', 0) - 1))) ||
                     // Case 2: Author or Privileged user editing
                     (request.auth != null && (request.auth.uid == existing().authorId || isPrivileged()) &&
                      isValidArticle(incoming()) &&
@@ -199,6 +204,11 @@ service cloud.firestore {
                         incoming().toolId == toolId &&
                         incoming().createdAt == request.time
                       ));
+      }
+
+      match /liked_articles/{articleId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == userId;
       }
 
       match /activity/{activityId} {

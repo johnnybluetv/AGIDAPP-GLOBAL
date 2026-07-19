@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, getDocFromCache, getDocFromServer } from "firebase/firestore";
+import { getFirestore, doc, getDocFromCache, getDocFromServer, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import firebaseConfig from "../firebase-applet-config.json";
 
@@ -8,6 +8,22 @@ const app = initializeApp(firebaseConfig);
 export const db = "firestoreDatabaseId" in firebaseConfig 
   ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId) 
   : getFirestore(app);
+
+// Enable offline database persistence
+try {
+  enableMultiTabIndexedDbPersistence(db).catch((err) => {
+    if (err.code === "failed-precondition") {
+      console.warn("Firestore persistence failed-precondition: multiple tabs open.");
+    } else if (err.code === "unimplemented") {
+      console.warn("Firestore persistence is unimplemented in this browser.");
+    } else {
+      console.warn("Firestore persistence error:", err);
+    }
+  });
+} catch (err) {
+  console.warn("Failed to initialize offline persistence:", err);
+}
+
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
