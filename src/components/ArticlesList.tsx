@@ -450,7 +450,9 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
                   </div>
 
                   {/* Native Article AdSense Placement for Approval */}
-                  <AdSenseUnit slot="5829104839" format="auto" className="my-10 border-slate-800/50 bg-slate-900/20" />
+                  <div className="my-10">
+                    <AdSenseUnit slot="5829104839" format="auto" className="border-slate-800/50 bg-slate-900/20" />
+                  </div>
 
                   <div className="mt-20 pt-10 border-t border-slate-800">
                     <CommentSection id={selectedArticle.id} type="article" isAdmin={currentUserRole !== "User"} authorId={selectedArticle.authorId} />

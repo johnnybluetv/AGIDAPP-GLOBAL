@@ -175,7 +175,7 @@ ${urls
   // Google AdSense Authorization Route
   app.get("/ads.txt", (req, res) => {
     res.set("Content-Type", "text/plain");
-    res.send("google.com, pub-7039003478830210, DIRECT, f08c47fec0942fa0");
+    res.send("google.com, pub-7039003478830210, DIRECT, f08c47fec0942fa0\n");
   });
 
   // Dynamic SEO Search Engine Sitemap Ping Endpoint

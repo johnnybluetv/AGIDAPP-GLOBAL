@@ -3100,9 +3100,9 @@ export default function App() {
         </section>
 
         {/* Primary Header AdSense Placement for Approval */}
-        <section className="max-w-7xl mx-auto px-6 mt-6">
+        <div className="max-w-7xl mx-auto px-6 mt-6">
           <AdSenseUnit slot="7463920184" format="auto" />
-        </section>
+        </div>
 
         {/* AI Tool Recommendation Assistant Section */}
         {!loading && (
@@ -3984,7 +3984,9 @@ export default function App() {
                     </AnimatePresence>
 
                     {/* Native Modal AdSense Placement for Approval */}
-                    <AdSenseUnit slot="1920384756" format="auto" className="border-slate-800/50 bg-slate-950/40" />
+                    <div className="px-6 py-2">
+                      <AdSenseUnit slot="1920384756" format="auto" className="border-slate-800/50 bg-slate-950/40" />
+                    </div>
 
                     <CommentSection id={selectedTool.id} type="tool" isAdmin={userRole !== "User"} authorId={selectedTool.authorId} />
 
