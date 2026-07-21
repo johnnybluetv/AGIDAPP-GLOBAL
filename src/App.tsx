@@ -31,6 +31,7 @@ import BlazingFire from "./components/BlazingFire";
 import AuthModal from "./components/AuthModal";
 import NewsletterForm from "./components/NewsletterForm";
 import LegalContactModal from "./components/LegalContactModal";
+import AdSenseUnit from "./components/AdSenseUnit";
 import { deleteDoc, doc, updateDoc, setDoc, increment, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { useAuth } from "./context/AuthContext";
 import { Helmet } from "react-helmet-async";
@@ -1802,54 +1803,10 @@ export default function App() {
       <header className="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-6 min-h-[5.5rem] py-2.5 flex items-center justify-between gap-4 overflow-hidden relative">
           
-          {/* Brand Logo & Screen mode (Fixed Left Column) */}
+          {/* Brand Logo & Post Blog Button (Fixed Left Column) */}
           <div className="flex flex-col items-start gap-1.5 shrink-0 z-10 bg-slate-950/80 pr-2">
-            <div className="flex items-center gap-2">
-              <div className="px-2.5 py-0.5 sm:py-1 bg-blue-600 rounded-lg text-white font-black tracking-tighter text-lg sm:text-xl shadow-lg shadow-blue-600/20 select-none">
-                Agidapp Global
-              </div>
-              <div className="relative">
-                <button 
-                  onClick={() => setShowScreenModeMenu(!showScreenModeMenu)}
-                  className="p-1.5 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all shadow-xl group cursor-pointer"
-                  title="Choose a Screen Type"
-                >
-                  <span className="text-sm">🌈</span>
-                </button>
-                <div className="absolute top-full left-0 mt-2 pointer-events-none">
-                  <p className="text-[7px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-950/80 px-1 rounded">
-                    Choose a Screen Type
-                  </p>
-                </div>
-
-                <AnimatePresence>
-                  {showScreenModeMenu && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute left-0 top-full mt-3 p-2 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-[100] min-w-[160px] grid grid-cols-1 gap-1"
-                    >
-                      {Object.keys(screenConfigs).map((mode) => (
-                        <button
-                          key={mode}
-                          onClick={() => {
-                            setScreenMode(mode as any);
-                            setShowScreenModeMenu(false);
-                          }}
-                          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest text-left rounded-xl transition-all cursor-pointer ${
-                            screenMode === mode 
-                            ? 'bg-blue-600 text-white' 
-                            : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                          }`}
-                        >
-                          {mode === 'Laptop2' ? 'Laptop' : mode} Mode
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+            <div className="px-2.5 py-0.5 sm:py-1 bg-blue-600 rounded-lg text-white font-black tracking-tighter text-lg sm:text-xl shadow-lg shadow-blue-600/20 select-none">
+              Agidapp Global
             </div>
 
             {/* Post a Blog/Article Quick Button */}
@@ -1943,33 +1900,71 @@ export default function App() {
                     <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'live' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
                     Sync: {syncStatus === 'live' ? 'Live' : 'Offline'}
                   </span>
-
-                  {/* Force Refresh Button */}
-                  <button
-                    onClick={handleForceRefresh}
-                    disabled={refreshing}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50 whitespace-nowrap cursor-pointer"
-                    title="Force refresh data directly from Firestore server"
-                  >
-                    <Zap className={`w-3 h-3 text-amber-500 ${refreshing ? 'animate-spin' : ''}`} />
-                    {refreshing ? 'Refreshed' : 'Force Refresh'}
-                  </button>
-
-                  {/* Debug Indexing / Seed Button */}
-                  <button
-                    onClick={handleDebugIndexing}
-                    disabled={indexingStatus === 'indexing'}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50 whitespace-nowrap cursor-pointer"
-                    title="Seed premium tools if directory is empty"
-                  >
-                    <Database className="w-3 h-3 text-blue-500" />
-                    {indexingStatus === 'indexing' ? 'Indexing...' : 'Debug Indexing'}
-                  </button>
                 </div>
               </div>
 
               {/* All Right-side Action Buttons */}
               <div className="flex items-center gap-4 shrink-0 pr-6">
+                
+                {/* Choose a Screen Type Toggle */}
+                <div className="relative shrink-0">
+                  <button 
+                    onClick={() => setShowScreenModeMenu(!showScreenModeMenu)}
+                    className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all shadow-xl group cursor-pointer flex items-center justify-center"
+                    title="Choose a Screen Type"
+                  >
+                    <span className="text-sm">🌈</span>
+                  </button>
+                  <AnimatePresence>
+                    {showScreenModeMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 top-full mt-3 p-2 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-[100] min-w-[160px] grid grid-cols-1 gap-1"
+                      >
+                        {Object.keys(screenConfigs).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => {
+                              setScreenMode(mode as any);
+                              setShowScreenModeMenu(false);
+                            }}
+                            className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest text-left rounded-xl transition-all cursor-pointer ${
+                              screenMode === mode 
+                              ? 'bg-blue-600 text-white' 
+                              : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                            }`}
+                          >
+                            {mode === 'Laptop2' ? 'Laptop' : mode} Mode
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Force Refresh Button */}
+                <button
+                  onClick={handleForceRefresh}
+                  disabled={refreshing}
+                  className="inline-flex items-center gap-1 px-2.5 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50 whitespace-nowrap cursor-pointer shadow-lg"
+                  title="Force refresh data directly from Firestore server"
+                >
+                  <Zap className={`w-3.5 h-3.5 text-amber-500 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{refreshing ? 'Refreshed' : 'Force Refresh'}</span>
+                </button>
+
+                {/* Debug Indexing / Seed Button */}
+                <button
+                  onClick={handleDebugIndexing}
+                  disabled={indexingStatus === 'indexing'}
+                  className="inline-flex items-center gap-1 px-2.5 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-wider font-mono transition-all disabled:opacity-50 whitespace-nowrap cursor-pointer shadow-lg"
+                  title="Seed premium tools if directory is empty"
+                >
+                  <Database className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="hidden sm:inline">{indexingStatus === 'indexing' ? 'Indexing...' : 'Debug Indexing'}</span>
+                </button>
                 {user ? (
                   <div className="flex items-center gap-1.5 sm:gap-2 relative shrink-0">
                     {/* Article Trigger Button */}
@@ -3104,6 +3099,11 @@ export default function App() {
           </div>
         </section>
 
+        {/* Primary Header AdSense Placement for Approval */}
+        <section className="max-w-7xl mx-auto px-6 mt-6">
+          <AdSenseUnit slot="7463920184" format="auto" />
+        </section>
+
         {/* AI Tool Recommendation Assistant Section */}
         {!loading && (
           <section className="py-8 max-w-7xl mx-auto px-6">
@@ -3310,6 +3310,11 @@ export default function App() {
                     />
                   ))}
                 </AnimatePresence>
+              </div>
+
+              {/* Native In-Feed AdSense Placement for Approval */}
+              <div className="py-2 max-w-5xl mx-auto">
+                <AdSenseUnit slot="8394018274" format="horizontal" />
               </div>
 
               {filteredTools.length > displayCount && (
@@ -3977,6 +3982,9 @@ export default function App() {
                         </motion.div>
                       )}
                     </AnimatePresence>
+
+                    {/* Native Modal AdSense Placement for Approval */}
+                    <AdSenseUnit slot="1920384756" format="auto" className="border-slate-800/50 bg-slate-950/40" />
 
                     <CommentSection id={selectedTool.id} type="tool" isAdmin={userRole !== "User"} authorId={selectedTool.authorId} />
 

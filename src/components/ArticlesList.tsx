@@ -9,6 +9,7 @@ import { Helmet } from "react-helmet-async";
 import CommentSection from "./CommentSection";
 import { useAuth } from "../context/AuthContext";
 import ShareModal from "./ShareModal";
+import AdSenseUnit from "./AdSenseUnit";
 
 interface ArticlesListProps {
   onClose: () => void;
@@ -447,6 +448,9 @@ export default function ArticlesList({ onClose, currentUserRole, initialArticleI
                         <Markdown>{selectedArticle.content}</Markdown>
                     </div>
                   </div>
+
+                  {/* Native Article AdSense Placement for Approval */}
+                  <AdSenseUnit slot="5829104839" format="auto" className="my-10 border-slate-800/50 bg-slate-900/20" />
 
                   <div className="mt-20 pt-10 border-t border-slate-800">
                     <CommentSection id={selectedArticle.id} type="article" isAdmin={currentUserRole !== "User"} authorId={selectedArticle.authorId} />

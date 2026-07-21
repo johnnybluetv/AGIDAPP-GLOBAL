@@ -10,7 +10,9 @@ import nodemailer from "nodemailer";
 // Load Firebase Config
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
 const appFirebase = initializeApp(firebaseConfig);
-const db = getFirestore(appFirebase, firebaseConfig.firestoreDatabaseId);
+const db = "firestoreDatabaseId" in firebaseConfig
+  ? getFirestore(appFirebase, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(appFirebase);
 
 // Initialize Gemini
 const ai = new GoogleGenAI({

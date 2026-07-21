@@ -743,6 +743,37 @@ export default function ToolCard({ tool, isFavorited, onView, onEdit, onDelete, 
             </button>
 
             <div className="flex items-center gap-2">
+              <Tooltip text={linkCopied ? "Copied!" : "Copy Shareable Link"}>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const shareUrl = `https://www.agidappglobal.com/share/${tool.id}`;
+                      await navigator.clipboard.writeText(shareUrl);
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 2000);
+                    } catch (err) {
+                      console.error("Failed to copy link", err);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all shadow-md ${
+                    linkCopied
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                      : 'bg-slate-800 text-slate-300 border-slate-750 hover:text-white hover:border-slate-600 hover:bg-slate-750'
+                  }`}
+                  aria-label="Copy shareable link"
+                >
+                  {linkCopied ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Link2 className="w-3.5 h-3.5 text-blue-400" />
+                  )}
+                  <span>{linkCopied ? "Copied!" : "Copy Link"}</span>
+                </motion.button>
+              </Tooltip>
+
               <Tooltip text="Share Tool (Social & Native Platforms)">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
